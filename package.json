@@ -41,7 +41,7 @@
     "fumadocs-core": "^16.8.11",
     "fumadocs-mdx": "^15.0.5",
     "fumadocs-ui": "^16.8.11",
-    "next": "16.2.6",
+    "next": "16.2.10",
     "next-sanity": "^12.4.5",
     "node-forge": "^1.4.0",
     "react": "19.2.7",
