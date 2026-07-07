@@ -23,7 +23,7 @@
     "@portabletext/react": "^6.2.0",
     "@react-pdf/renderer": "^4.5.1",
     "@sanity/client": "^7.22.0",
-    "@sanity/code-input": "^7.1.1",
+    "@sanity/code-input": "^7.2.5",
     "@sanity/color-input": "^6.0.6",
     "@sanity/image-url": "^2.1.1",
     "@sanity/vision": "^5.25.1",
