@@ -1,6 +1,13 @@
 # Kakunin — AI Agent Compliance Platform
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
+[![SDKs: Apache-2.0](https://img.shields.io/badge/SDKs-Apache--2.0-green.svg)](https://github.com/nqzai/kakunin-sdk-typescript)
+
+<p align="center">
+  <img src="public/kakunin-demo.gif" alt="An AI agent's risk score climbs as it misbehaves; at 0.85 its X.509 certificate is automatically revoked (decertified) within seconds." width="820" />
+</p>
+
+<p align="center"><em>An agent goes rogue → risk climbs → the certificate auto-revokes. Try it live, no signup: <a href="https://www.kakunin.ai/compliance-demo">kakunin.ai/compliance-demo</a></em></p>
 
 Kakunin is compliance and identity infrastructure for AI agents. It issues X.509
 certificates to agents via AWS KMS, scores their behavior in real time, revokes
