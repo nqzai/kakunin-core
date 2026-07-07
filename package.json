@@ -38,7 +38,7 @@
     "date-fns": "^4.2.1",
     "discord.js": "^14.26.4",
     "disposable-email-domains": "^1.0.62",
-    "fumadocs-core": "^16.8.11",
+    "fumadocs-core": "^16.11.1",
     "fumadocs-mdx": "^15.0.5",
     "fumadocs-ui": "^16.8.11",
     "next": "16.2.6",
