@@ -1,0 +1,73 @@
+/*
+ * Kakunin Docs — brand overrides for Fumadocs UI
+ * Targets Fumadocs v16 CSS custom properties (Tailwind HSL vars)
+ */
+
+:root {
+  /* Kakunin green — #2B934F → hsl(142 54% 37%) */
+  --primary: 142 54% 37%;
+  --primary-foreground: 0 0% 98%;
+
+  /* Ring / focus */
+  --ring: 142 54% 37%;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+
+/* Active sidebar item */
+[data-active="true"] {
+  color: hsl(142 54% 30%) !important;
+  background: hsl(142 54% 95%) !important;
+  font-weight: 600;
+}
+
+/* Sidebar separator labels */
+[data-type="separator"] {
+  font-family: ui-monospace, 'Geist Mono', monospace !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: hsl(215 14% 55%) !important;
+  margin-top: 20px !important;
+}
+
+/* ── Links ───────────────────────────────────────────── */
+.prose a {
+  color: hsl(142 54% 30%);
+  text-decoration-color: hsl(142 54% 70%);
+}
+.prose a:hover {
+  color: hsl(142 54% 22%);
+}
+
+/* ── Code blocks ─────────────────────────────────────── */
+.prose pre {
+  border: 1px solid hsl(43 18% 88%);
+}
+
+/* Inline code */
+.prose :not(pre) > code {
+  background: hsl(142 40% 94%);
+  color: hsl(142 54% 28%);
+  border: 1px solid hsl(142 40% 86%);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.875em;
+}
+
+/* ── Callout variants ────────────────────────────────── */
+.nd-callout[data-type="warn"] {
+  --callout-color: hsl(38 92% 40%);
+  border-color: hsl(38 92% 75%);
+  background: hsl(38 92% 96%);
+}
+
+/* ── Page title ──────────────────────────────────────── */
+h1.nd-title {
+  letter-spacing: -0.025em;
+}
+
+/* ── TOC active ──────────────────────────────────────── */
+[data-active="true"][data-toc] {
+  color: hsl(142 54% 30%) !important;
+}

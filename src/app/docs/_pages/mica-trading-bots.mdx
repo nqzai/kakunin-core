@@ -1,0 +1,513 @@
+export const metadata = {
+  title: "MiCA Compliance for Autonomous Trading Bots",
+  description: "Technical guide to implementing MiCA Articles 67–72 for algorithmic trading agents. Covers certificate binding, scope enforcement, event logging, and revocation.",
+};
+
+# MiCA Compliance for Autonomous Trading Bots
+
+Markets in Crypto-Assets (MiCA) Regulation (EU) entered into force in 2023. Articles 67–72 establish strict requirements for **operators of algorithmic trading systems** — which includes autonomous AI trading bots.
+
+This guide maps MiCA requirements to technical implementation using Kakunin runtime binding.
+
+---
+
+## MiCA Article 67: Governance Framework
+
+**Requirement:** Crypto asset service providers (CASPs) must maintain appropriate governance for algorithmic trading, including:
+- Documented authority limits for the algorithm
+- Risk controls and kill-switch procedures
+- Regular testing and performance monitoring
+- Clear accountability (who is responsible if it goes wrong?)
+
+**Implementation with Kakunin:**
+
+```typescript
+// MiCA Art. 67: Define governance framework
+const tradingBotPolicy = {
+  agentId: 'trading_bot_eu_v2',
+  operator: 'acme_trading_ltd',
+  operatorRegulatorId: 'ESMA-001234',  // Regulatory registration
+  
+  // Authority limits
+  scope: {
+    maxTransactionSize: 50000,  // EUR
+    maxDailyVolume: 1000000,
+    allowedMarkets: ['EUR_USD', 'GBP_EUR'],
+    allowedRegions: ['eu-west-1'],
+    tradingHours: {
+      start: '08:00',
+      end: '17:00',
+      tz: 'UTC',
+      excludeWeekends: true,
+    },
+  },
+
+  // Risk controls
+  riskControls: {
+    killSwitchManual: true,           // Operator can kill at any time
+    killSwitchAutomatic: 'anomaly_0.85', // Auto-revoke if anomaly > 0.85
+    maxConsecutiveFailures: 3,
+    circuitBreakerThreshold: 0.75,
+  },
+
+  // Testing schedule
+  testing: {
+    basefitTesting: '2026-06-01',     // Annual fitness test required
+    scenarioTesting: 'quarterly',      // Quarterly stress tests
+    penetrationTesting: 'annual',
+  },
+
+  // Governance documentation
+  governance: {
+    documentedBy: 'compliance_team@acme',
+    approvedBy: 'ceo@acme',
+    lastReview: '2026-05-01',
+    nextReview: '2026-08-01',
+  },
+};
+
+// The policy above is your governance record. Its enforceable limits are encoded
+// into the agent's X.509 certificate at creation via `financial_scope`, so every
+// verification checks them cryptographically — there is no separate policy store.
+const agent = await kakunin.agents.create({
+  name: tradingBotPolicy.agentId,
+  model_hash: await Kakunin.computeModelHash('algo-trader:v2'),
+  model: 'algo-trader',
+  version: '2.0.0',
+  financial_scope: {
+    max_single_trade_usd: tradingBotPolicy.scope.maxTransactionSize,
+    daily_limit_usd: tradingBotPolicy.scope.maxDailyVolume,
+    permitted_instruments: tradingBotPolicy.scope.allowedMarkets,
+  },
+  metadata: {
+    operator: tradingBotPolicy.operator,
+    regulatorId: tradingBotPolicy.operatorRegulatorId,
+  },
+});
+const cert = await kakunin.agents.certify(agent.id);
+console.log(`Agent certified: ${cert.serial_number}`);
+```
+
+---
+
+## MiCA Article 68: Pre-Trading Risk Controls
+
+**Requirement:** Operators must have pre-trade controls that prevent orders violating scope limits before they're sent to the exchange.
+
+**Implementation:**
+
+```typescript
+// Pre-trade risk check (runs BEFORE signing). The scope comes from the agent's
+// certificate (verified, keyless); the risk band comes from its behavioral
+// profile. You track cumulative daily volume yourself and pass it in.
+async function preTradeRiskCheck(serial, tradeRequest, todayVolume) {
+  const verified = await kakunin.verify.cert(serial);
+  if (verified.status !== 'active') {
+    return { allowed: false, reason: 'certificate_not_active', status: verified.status };
+  }
+  const scope = verified.financial_scope;
+
+  // Check 1: Size limit
+  if (tradeRequest.size > scope.max_single_trade_usd) {
+    return {
+      allowed: false,
+      reason: 'exceeds_scope_size',
+      limit: scope.max_single_trade_usd,
+      requested: tradeRequest.size,
+    };
+  }
+
+  // Check 2: Market allowed
+  if (!scope.permitted_instruments.includes(tradeRequest.market)) {
+    return {
+      allowed: false,
+      reason: 'market_not_allowed',
+      permitted: scope.permitted_instruments,
+      requested: tradeRequest.market,
+    };
+  }
+
+  // Check 3: Daily volume cap
+  if (todayVolume + tradeRequest.size > scope.daily_limit_usd) {
+    return {
+      allowed: false,
+      reason: 'daily_volume_cap_exceeded',
+      cap: scope.daily_limit_usd,
+      current: todayVolume,
+      requested: tradeRequest.size,
+    };
+  }
+
+  // Check 4: Trading hours
+  const utcHour = new Date().getUTCHours();
+  if (utcHour < 8 || utcHour >= 17) {
+    return {
+      allowed: false,
+      reason: 'outside_trading_hours',
+      hours: '08:00-17:00 UTC',
+    };
+  }
+
+  // Check 5: Circuit breaker — block if the agent has drifted into the high band
+  const risk = await kakunin.agents.getRisk(verified.agent_id);
+  if (risk.dominant_band === 'high') {
+    return { allowed: false, reason: 'circuit_breaker_active', band: risk.dominant_band };
+  }
+
+  return { allowed: true };
+}
+```
+
+---
+
+## MiCA Article 69: Post-Trade Transparency
+
+**Requirement:** All trades must be logged with sufficient detail for regulators to audit.
+
+**Implementation:**
+
+```typescript
+// Post-trade logging (MiCA Art. 69)
+async function logTrade(tradeRequest, tradeResponse) {
+  const auditEntry = {
+    timestamp: new Date().toISOString(),
+    
+    // Agent identification
+    agentId: 'trading_bot_eu_v2',
+    agentCertSerial: 'f1d4e8c7b2a9f3e6',  // From certificate
+    agentOperator: 'acme_trading_ltd',
+    
+    // Trade details
+    orderId: tradeResponse.orderId,
+    market: tradeRequest.market,
+    side: tradeRequest.side,  // BUY or SELL
+    size: tradeRequest.size,
+    executionPrice: tradeResponse.executionPrice,
+    executionTime: tradeResponse.executionTime,
+    
+    // Proof of authorization
+    certificate: tradeRequest.certificate,  // X.509 cert
+    signature: tradeRequest.signature,      // Cryptographic proof
+    signatureVerified: true,
+    
+    // Pre-trade controls
+    preTradeCheck: {
+      withinScope: true,
+      withinBaseline: true,
+      anomalyScore: 0.23,
+      circuitBreakerActive: false,
+    },
+    
+    // Counterparty (if known)
+    counterparty: tradeResponse.counterparty,
+    counterpartyId: tradeResponse.counterpartyId,
+  };
+
+  // Stream the trade to Kakunin. State-changing operations are recorded to the
+  // platform's WORM (write-once) audit log automatically — you don't insert rows.
+  await kakunin.events.ingest({
+    agentId: auditEntry.agentId,
+    actionType: 'transaction_initiated',
+    details: auditEntry,
+  });
+
+  // Send to regulator reporting system
+  await submitToFinancialReporting({
+    reportingId: 'ESMA-EMIR',  // European transaction reporting
+    entry: auditEntry,
+  });
+}
+```
+
+---
+
+## MiCA Article 70: Segregation of Duties
+
+**Requirement:** The entity deploying the bot (the operator) must be distinct from the entity who authorized it (typically a board decision), and both must be distinct from the technical implementation.
+
+**Implementation via Certificate Issuer:**
+
+```typescript
+// MiCA Art. 70: Segregation of duties proven via certificate chain
+
+// Step 1: Board decision
+const boardResolution = {
+  passed: '2026-05-01',
+  approvedBy: ['ceo@acme', 'cfo@acme', 'compliance_lead@acme'],
+  resolution: 'Authorize deployment of trading_bot_eu_v2 with €50K scope',
+};
+
+// Step 2: Operator deploys, but doesn't issue the cert itself.
+// Kakunin (trusted third party) issues it from its own Root CA via AWS KMS —
+// signed by Kakunin's key, not the operator's. Scope was fixed at agent creation.
+const cert = await kakunin.agents.certify(agent.id);
+// cert.certificate_pem is issued by "Kakunin Certificate Authority"
+
+// Step 3: Regulator can verify
+// - Certificate was issued by Kakunin (not self-signed)
+// - Board approved the scope
+// - Operator deployed it
+// - All three roles are separate
+```
+
+---
+
+## MiCA Article 71: Event Logging & Record-Keeping
+
+**Requirement:** Maintain permanent, tamper-proof records of every algorithm decision and trade.
+
+**Implementation:**
+
+```typescript
+// Article 71: Write-once audit log with immutable records
+
+// Every agent action creates an event
+async function logAgentEvent(agent, event) {
+  const logEntry = {
+    _id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    
+    // Event classification
+    eventType: 'trade.executed',  // or 'anomaly.detected', 'cert.revoked', etc.
+    
+    // Agent identification
+    agentId: agent.id,
+    agentCertificate: agent.certificatePem,
+    agentSignature: event.signature,  // Proves agent authorized this
+    
+    // Event details
+    actionType: event.actionType,
+    payload: event.payload,
+    riskScore: event.riskScore,
+    
+    // Pre/post state
+    stateBefore: event.stateBefore,
+    stateAfter: event.stateAfter,
+    
+    // Authorization chain
+    authorizedBy: agent.id,  // Agent certificate
+    verifiedBy: 'kakunin-signing-service',  // Kakunin verified it
+    approvedBy: null,  // Null = not human-approved (automatic)
+  };
+
+  // Every state-changing call writes to Kakunin's WORM audit log automatically.
+  // Ingesting the event is what records it — there is no manual insert.
+  await kakunin.events.ingest({
+    agentId: agent.id,
+    actionType: event.actionType,
+    details: logEntry,
+  });
+
+  // Replicate to external audit system (redundancy)
+  await externalAuditStorage.write({
+    path: `/agent-events/${agent.id}/${logEntry._id}`,
+    data: logEntry,
+  });
+
+  return logEntry._id;
+}
+```
+
+---
+
+## MiCA Article 72: Testing & Incident Response
+
+**Requirement:** Regular testing of the algorithm's functioning under various market conditions. Document how the firm responds to incidents (circuit breaker, manual kill, etc.).
+
+**Implementation:**
+
+```typescript
+// Article 72: Fitness testing & incident procedures
+
+const testingPlan = {
+  // 1. Annual fitness test (required)
+  annualFitnessTesting: {
+    date: '2026-06-01',
+    scope: [
+      'Does the algorithm still execute trades correctly?',
+      'Does the circuit breaker activate on anomalies?',
+      'Can the operator manually kill the algorithm?',
+      'Are all audit logs intact and tamper-proof?',
+    ],
+    results: null,  // To be filled after test
+  },
+
+  // 2. Quarterly stress testing
+  stressTests: [
+    {
+      name: 'Flash crash scenario',
+      description: 'Market drops 30% in 5 seconds. Can agent handle volatility?',
+      date: '2026-05-31',
+      passedChecks: [
+        'Circuit breaker activated at anomaly > 0.75',
+        'No trades executed above scope limit',
+        'Audit log complete',
+      ],
+    },
+    {
+      name: 'Counterparty default',
+      description: 'Major exchange goes offline. Does agent retry safely?',
+      date: '2026-06-30',
+    },
+    {
+      name: 'Market manipulation',
+      description: 'Pump-and-dump detected. Agent detects anomaly and stops.',
+      date: '2026-07-31',
+    },
+  ],
+
+  // 3. Incident response procedures
+  incidentResponse: {
+    // Procedure 1: Anomaly detected
+    anomalyDetected: {
+      threshold: 0.85,
+      action: 'Auto-revoke certificate',
+      notification: 'SMS + email to operator team',
+      graceperiod: '5 minutes',
+      escalation: 'If not ACK'd, revoke is final',
+    },
+
+    // Procedure 2: Manual kill switch
+    manualKillSwitch: {
+      who: ['ceo@acme', 'cfo@acme', 'compliance_lead@acme'],
+      howFast: '< 10 seconds from decision to certificate revocation',
+      log: 'Logged with user identity + timestamp',
+    },
+
+    // Procedure 3: Post-incident audit
+    postIncidentAudit: {
+      trigger: 'Any anomaly > 0.75 or manual kill',
+      timeline: 'Within 24 hours',
+      scope: [
+        'What caused the incident?',
+        'What was the impact ($ trades blocked)?',
+        'What controls failed?',
+        'What controls worked?',
+        'What changes needed?',
+      ],
+    },
+  },
+};
+```
+
+---
+
+## Complete MiCA Compliance Checklist
+
+| Article | Requirement | Implementation | Status |
+|---------|---|---|---|
+| **67** | Governance framework | Board-approved policy, documented scope, testing plan | ✓ |
+| **68** | Pre-trade controls | Size, market, time, circuit breaker checks | ✓ |
+| **69** | Post-trade transparency | Complete audit log with agent signature | ✓ |
+| **70** | Segregation of duties | Third-party cert issuer (Kakunin) proves separation | ✓ |
+| **71** | Record-keeping | WORM audit log, immutable event records | ✓ |
+| **72** | Testing & response | Annual fitness tests, incident procedures, auto-revocation | ✓ |
+
+---
+
+## Deployment: MiCA-Compliant Architecture
+
+```yaml
+# Kubernetes deployment for MiCA compliance
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-bot-mica
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading-bot-mica
+  template:
+    metadata:
+      labels:
+        app: trading-bot-mica
+      annotations:
+        mica-policy: registered
+        governance-framework: version-2
+    spec:
+      # Pod security: RLS (restrictive Linux security)
+      securityContext:
+        runAsNonRoot: true
+        fsReadOnlyRootFilesystem: true
+
+      containers:
+      # Main trading bot
+      - name: trading-bot
+        image: myrepo/trading-bot:v2
+        env:
+        - name: KAKUNIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kakunin-secrets
+              key: api-key
+        - name: OPERATOR_ID
+          value: acme_trading_ltd
+        volumeMounts:
+        - name: cert-volume
+          mountPath: /var/certs
+          readOnly: true
+        - name: audit-log-volume
+          mountPath: /var/audit
+          readOnly: false
+
+      # MiCA enforcer sidecar
+      - name: mica-enforcer
+        image: kakunin/mica-enforcer:latest
+        env:
+        - name: MICA_POLICY_ID
+          value: trading_bot_eu_v2_policy
+        - name: OPERATOR_ID
+          value: acme_trading_ltd
+        ports:
+        - containerPort: 8443
+          name: mica-api
+        volumeMounts:
+        - name: cert-volume
+          mountPath: /var/certs
+          readOnly: true
+        - name: audit-log-volume
+          mountPath: /var/audit
+          readOnly: false
+
+      volumes:
+      - name: cert-volume
+        projected:
+          sources:
+          - secret:
+              name: agent-certificate
+              items:
+              - key: cert.pem
+                path: cert.pem
+              - key: kms-key-arn.txt
+                path: kms-key-arn.txt
+      - name: audit-log-volume
+        persistentVolumeClaim:
+          claimName: audit-log-pvc
+          readOnly: false
+
+      # Node affinity: EU regions only (GDPR)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: region
+                operator: In
+                values:
+                - eu-west-1
+                - eu-central-1
+```
+
+---
+
+## Next Steps
+
+1. **Register your governance policy** with Kakunin
+2. **Deploy the agent** with MiCA-compliant scope + baseline
+3. **Set up quarterly stress testing** (and log results)
+4. **Prepare regulatory documentation** (board resolutions, testing reports)
+5. **Monitor the dashboard** — anomaly detection and audit logs are your compliance evidence
+
+**Ready to deploy?** See [Quickstart: MiCA-Compliant Trading Bot](/docs/mica-trading-bot-quickstart).

@@ -1,0 +1,11 @@
+/* TEAM */
+Founder: Kakunin
+Site: https://www.kakunin.ai
+Contact: ai@kakunin.ai
+
+/* SECURITY */
+Security contact: security@kakunin.ai
+Abuse contact: abuse@kakunin.ai
+
+/* THANKS */
+Built for regulated AI operators, fintech teams, and compliance-first founders.

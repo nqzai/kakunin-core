@@ -1,0 +1,7 @@
+Contact: mailto:security@kakunin.ai
+Contact: mailto:abuse@kakunin.ai
+Expires: 2027-06-08T00:00:00.000Z
+Canonical: https://www.kakunin.ai/.well-known/security.txt
+Preferred-Languages: en
+Policy: https://www.kakunin.ai/privacy
+Hiring: https://www.kakunin.ai/careers

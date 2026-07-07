@@ -1,0 +1,123 @@
+export const metadata = {
+  title: "Regulatory Mapping Matrix — EU AI Act, MiCA, GDPR & DORA",
+  description: "Article-by-article mapping of EU AI Act, MiCA, GDPR, and DORA obligations to Kakunin API features, SDK methods, and configuration options.",
+};
+
+# Regulatory Mapping Matrix
+
+This reference maps specific regulatory obligations across EU AI Act, MiCA, GDPR Article 22, and DORA to the Kakunin features and API calls that satisfy them. Use this when preparing a compliance evidence package or scoping a new deployment.
+
+For the practical checklist format, see [EU AI Act Implementation Checklist](/docs/eu-ai-act-checklist). For the deep-dive on Annex III, see [EU AI Act Annex III](/docs/eu-ai-act-annex-iii).
+
+---
+
+## EU AI Act
+
+### Title III — High-Risk AI Systems
+
+| Article | Obligation | Kakunin Feature | API / SDK Method |
+|---|---|---|---|
+| **Art. 9** | Risk management system — continuous identification, analysis, and mitigation of risks | Behavioral risk engine; rolling anomaly scoring | `kakunin.events.ingest()` → risk score computed per event |
+| **Art. 10(3)** | Training, validation, testing data must be relevant, representative, and free from errors | Agent metadata registry captures model version, dataset hash at registration | `agents.create({ metadata: { dataset_hash } })` |
+| **Art. 11** | Technical documentation establishing conformity | Certificate includes signed metadata snapshot; exportable as PDF | `certificates.getDocumentationBundle(agentId)` |
+| **Art. 12** | Automatic logging sufficient for post-incident reconstruction | WORM audit log — every event signed by KMS key, tamper-evident | `events.ingest()` → immutable `behavior_events` table |
+| **Art. 13** | Transparency — humans must be able to interpret outputs | Every agent action logged with payload hash + reasoning trace | `audit_log` entries queryable per agent + time range |
+| **Art. 14** | Human oversight — ability to pause, stop, correct | Certificate revocation ≤ 100 ms via OCSP/CRL | `certificates.revoke(agentId, { reason })` |
+| **Art. 15** | Accuracy, robustness, cybersecurity — documented performance targets | Behavioral baseline establishes expected performance envelope | `agents.getRisk(agentId)` |
+| **Art. 17** | Quality management system | Governance framework exported with each certificate bundle | Dashboard → Project → Export Compliance Report |
+| **Art. 72** | Automatic logging requirement for general-purpose AI | Same WORM logging as Art. 12 | `events.ingest()` |
+
+---
+
+## MiCA — Markets in Crypto-Assets Regulation
+
+### Title VI — Crypto-Asset Service Providers
+
+| Article | Obligation | Kakunin Feature | API / SDK Method |
+|---|---|---|---|
+| **Art. 67** | Registration of CASPs — entity must be authorised | Operator regulatory ID recorded in agent metadata | `agents.create({ metadata: { regulatorId } })` |
+| **Art. 68** | Conduct of business requirements | Scope enforcement: `maxTradeSize`, `allowedMarkets`, `tradingHours` | `certificates.issue({ scope: micaPolicy.scope })` |
+| **Art. 69** | Conflicts of interest | Agent scope prevents cross-instrument execution outside policy | Certificate scope checked at each `verify_agent_scope` call |
+| **Art. 70** | Safeguarding client assets — record keeping | 365-day certificate validity; immutable audit trail | `agents.certify(agentId)` |
+| **Art. 71** | Complaints handling — audit trail | Every action logged with timestamp, signature, agent identity | `audit_log` queryable by agent + event type |
+| **Art. 72** | Transaction reporting | Signed trade payloads; exportable JSON audit logs | `events.export({ agentId, from, to, format: 'json' })` |
+| **Art. 73** | Prudential requirements — real-time monitoring | Anomaly score computed per event; pre-revocation at ≥ 0.75 | `monitoring.getAgentStatus(agentId)` |
+| **Art. 74** | Organisational requirements | Agent registry stores version, operator, governance dates | `agents.list()` → full registry with metadata |
+| **Art. 75** | Business continuity | Automatic certificate renewal 30 days before expiry (opt-in) | `project.settings.autoRenew = true` |
+
+---
+
+## GDPR
+
+### Article 22 — Automated Individual Decision-Making
+
+| Obligation | Kakunin Feature | API / SDK Method |
+|---|---|---|
+| Right to human review of automated decisions | Human oversight toggle — pause all agent actions pending human sign-off | `kakunin.agents.pause(agentId)` |
+| Meaningful information about the logic of automated decisions | Audit log exports reasoning traces + input hashes for each decision | `audit_log.export({ agentId, includePayloadHashes: true })` |
+| Right to object and obtain human intervention | Kill-switch via dashboard or API; all in-flight requests blocked | `certificates.revoke(agentId, { immediate: true })` |
+| No decisions based solely on automated processing for legal/similar effects | Scope limits: agents cannot execute above defined thresholds without human co-sign | `scope.humanApprovalThreshold: 50000` in cert policy |
+
+---
+
+## DORA — Digital Operational Resilience Act
+
+### Chapter II — ICT Risk Management
+
+| Article | Obligation | Kakunin Feature | API / SDK Method |
+|---|---|---|
+| **Art. 5** | ICT risk management framework | Agent risk scoring + automatic circuit breakers | Risk engine runs on every `events.ingest()` call |
+| **Art. 8** | Identification of ICT risks | Behavioral anomaly detection; baseline deviation alerts | `agents.getRisk(agentId)` |
+| **Art. 9** | Protection of ICT systems — cryptographic controls | X.509 certificates via AWS KMS; no key material in application layer | `certificates.issue()` → KMS ARN returned, never private key |
+| **Art. 10** | Detection of ICT anomalies | Anomaly score ≥ 0.3 → medium; ≥ 0.75 → warning; ≥ 0.85 → auto-revoke | `events.ingest()` → score in response |
+| **Art. 11** | Response and recovery | Certificate re-issuance after incident; incident logged in audit trail | `certificates.reissue(agentId, { incidentRef })` |
+| **Art. 12** | Backup policies and restore procedures | KMS key ARN stored in DB; re-issuance from same ARN available | Dashboard → Agent → Reissue Certificate |
+| **Art. 16** | Reporting of major ICT incidents | Webhook event `risk.alert` with severity + affected agent details | `webhooks.subscribe({ events: ['risk.alert'] })` |
+| **Art. 28** | Managing ICT third-party risk | Agent registry flags third-party model providers + framework versions | `agents.create({ metadata: { model_provider, framework } })` |
+
+---
+
+## Quick Evidence Export
+
+For a regulatory submission, export a compliance bundle that includes all of the above in a structured ZIP:
+
+```typescript
+const bundle = await kakunin.compliance.exportBundle({
+  agentId: 'agent_abc123',
+  regulations: ['eu-ai-act', 'mica', 'dora'],
+  format: 'pdf',   // or 'json'
+  dateRange: {
+    from: '2026-01-01',
+    to: '2026-05-28',
+  },
+});
+
+// bundle.url — signed S3 URL, valid 24 h
+console.log(bundle.url);
+```
+
+The bundle includes: certificate chain PEM, signed audit log export, behavioral baseline profile, risk score time-series, and a regulatory mapping index referencing each log entry against the article it satisfies.
+
+---
+
+## Article Cross-Reference Index
+
+| Kakunin Feature | EU AI Act | MiCA | GDPR | DORA |
+|---|---|---|---|---|
+| X.509 certificate issuance | 9, 11, 15 | 67, 68, 70 | Art. 22 | 9 |
+| WORM behavioral event log | 12, 13, 72 | 71, 72 | Art. 22 | 5, 8 |
+| Behavioral baseline + anomaly scoring | 9, 15 | 73 | — | 5, 10 |
+| Certificate revocation (OCSP/CRL) | 14 | 73 | Art. 22 | 11 |
+| Scope enforcement (`verify_agent_scope`) | 9, 14 | 68, 69 | Art. 22 | 9 |
+| Risk alert webhooks | 14 | 73, 75 | — | 16 |
+| Audit log export | 11, 12, 13 | 72 | Art. 22 | 12 |
+| Agent metadata registry | 10, 11, 17 | 67, 74 | — | 28 |
+
+---
+
+## Related
+
+- [EU AI Act Annex III](/docs/eu-ai-act-annex-iii) — high-risk system categories and conformity assessment
+- [EU AI Act Checklist](/docs/eu-ai-act-checklist) — per-article implementation checklist with code
+- [KYC for AI Agents](/docs/kyc-for-ai-agents) — how KYC principles translate to agent governance
+- [Agent Security Guide](/docs/agent-security) — threat model and runtime hardening

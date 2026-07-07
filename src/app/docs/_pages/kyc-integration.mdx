@@ -1,0 +1,394 @@
+export const metadata = {
+  title: "Kakunin Integration Guide — SDK, API Keys & Webhooks | Docs",
+  description: "End-to-end developer guide for integrating Kakunin: SDK setup, API authentication, Next.js middleware, webhook verification, and testing.",
+};
+
+# Kakunin Integration Guide
+
+This guide walks through every integration point: SDK installation, API key management, middleware wiring, webhook delivery, and verification endpoints. It assumes you have a Kakunin account and at least one agent registered.
+
+For conceptual background on KYC principles for agents, see [KYC for AI Agents](/docs/kyc-for-ai-agents). For a quickstart with a trading bot, see [MiCA Trading Bot Quickstart](/docs/mica-trading-bot-quickstart).
+
+---
+
+## 1. API Keys
+
+Every API call requires a key issued from your dashboard. Keys are scoped to a project.
+
+```bash
+# Dashboard → Project Settings → API Keys → Create key
+# Prefix: kak_live_  (production)  /  kak_test_  (sandbox)
+KAKUNIN_API_KEY=kak_live_xxxxxxxxxxxxxxxx
+```
+
+Keys are validated in Kakunin edge middleware — they never touch your application code. Pass the key as a Bearer token:
+
+```http
+GET /v1/agents HTTP/1.1
+Host: api.kakunin.ai
+Authorization: Bearer kak_live_xxxxxxxxxxxxxxxx
+```
+
+Rotate keys from the dashboard any time. Revocation propagates in < 500 ms across all edge nodes.
+
+---
+
+## 2. TypeScript SDK
+
+### Install
+
+```bash
+npm install @kakunin/sdk
+```
+
+Requires Node.js 18+. Works in any environment with the Web Crypto API.
+
+### Initialise
+
+```typescript
+// lib/kakunin.ts
+import { Kakunin } from '@kakunin/sdk';
+
+export const kakunin = new Kakunin({
+  apiKey: process.env.KAKUNIN_API_KEY!,
+  baseUrl: 'https://api.kakunin.ai/v1',  // default — omit in most cases
+  timeoutMs: 10_000,
+  maxRetries: 3,
+});
+```
+
+Export one singleton from `lib/kakunin.ts` — never instantiate per-request.
+
+### Register an agent
+
+`model_hash` binds the certificate to an exact model version. Use the static
+`Kakunin.computeModelHash` helper to derive it. `financial_scope` (encoded into
+the X.509 certificate) is what constrains the agent at verification time.
+
+```typescript
+import { Kakunin } from '@kakunin/sdk';
+import { kakunin } from '@/lib/kakunin';
+
+const agent = await kakunin.agents.create({
+  name: 'invoice-processor-v2',
+  model_hash: await Kakunin.computeModelHash('claude-3-5-haiku:2024-10'),
+  model: 'claude-3-5-haiku',
+  version: '2.0.0',
+  permitted_actions: ['invoice:read', 'payment:initiate'],
+  financial_scope: {
+    max_single_trade_usd: 10_000,
+    permitted_instruments: ['EUR'],
+  },
+  metadata: { framework: 'vercel-ai-sdk', operator: 'Acme Ltd' },
+});
+
+console.log(agent.id); // agt_abc123
+```
+
+### Issue a certificate
+
+`certify` issues an X.509 certificate via AWS KMS — the private key never leaves
+the HSM. Certificates are valid 365 days (MiCA Art. 70). Scope comes from the
+`financial_scope`/`permitted_actions` set at agent creation.
+
+```typescript
+const cert = await kakunin.agents.certify(agent.id);
+
+// Store these — never log the PEM in plaintext
+const { certificate_pem, serial_number, expires_at } = cert;
+console.log(serial_number); // c4f9-17a2-6b8e
+```
+
+### Verify a certificate
+
+Verification is public and keyless — verify by serial number:
+
+```typescript
+const verified = await kakunin.verify.cert(serial_number);
+
+if (verified.status !== 'active') {
+  throw new Error(`Certificate not active: ${verified.status}`);
+}
+
+console.log(verified.agent_id);          // agt_abc123
+console.log(verified.permitted_actions); // ['invoice:read', 'payment:initiate']
+```
+
+---
+
+## 3. Python SDK
+
+### Install
+
+```bash
+pip install kakunin
+```
+
+Requires Python 3.10+.
+
+### Initialise
+
+```python
+# lib/kakunin_client.py
+from kakunin import Kakunin
+import os
+
+client = Kakunin(api_key=os.environ["KAKUNIN_API_KEY"])
+```
+
+### Register + certify
+
+```python
+agent = await client.agents.create(
+    name="data-pipeline-agent",
+    model_hash=Kakunin.compute_model_hash("gpt-4o:2024-08"),
+    model="gpt-4o",
+    version="1.4.2",
+    permitted_actions=["db:read", "report:write"],
+    metadata={"framework": "langchain", "operator": "DataCo GmbH"},
+)
+
+cert = await client.agents.certify(agent.id)
+print(cert.serial_number)
+```
+
+### `verify_agent_scope` decorator
+
+Gate a function on a live certificate check plus a required scope:
+
+```python
+from kakunin.integrations.scope import verify_agent_scope
+
+@verify_agent_scope(client, agent_id="agt-123", required_scopes=["payment:initiate"])
+async def initiate_payment(amount: float):
+    # Only executes if the agent is active and holds the required scope
+    ...
+```
+
+---
+
+## 4. Next.js Middleware
+
+Enforce agent certificates on inbound requests with the SDK's `verify` subpath.
+`kakuninMiddleware` runs before your route handlers, verifies the
+`X-Kakunin-Cert-Serial` header (fail-closed by default), and hands back the
+verified agent.
+
+```typescript
+// middleware.ts
+import { NextResponse, type NextRequest } from 'next/server';
+import { kakuninMiddleware } from '@kakunin/sdk/verify';
+
+const enforce = kakuninMiddleware({ onVerifyTimeout: 'fail-closed' });
+
+export const config = {
+  matcher: ['/api/v1/:path*'],
+};
+
+export async function middleware(req: NextRequest) {
+  const { agent, reject } = await enforce(req);
+  if (!agent) return reject('Missing or invalid agent certificate');
+
+  // agent.permitted_actions is verified and typed
+  const res = NextResponse.next();
+  res.headers.set('x-agent-id', agent.agent_id);
+  res.headers.set('x-agent-scope', JSON.stringify(agent.permitted_actions));
+  return res;
+}
+```
+
+Read the forwarded values in your route handler:
+
+```typescript
+// app/api/v1/payments/route.ts
+export async function POST(req: NextRequest) {
+  const agentId = req.headers.get('x-agent-id')!;
+  const actions = JSON.parse(req.headers.get('x-agent-scope')!) as string[];
+
+  if (!actions.includes('payment:initiate')) {
+    return NextResponse.json({ error: 'insufficient scope' }, { status: 403 });
+  }
+
+  // ... business logic
+}
+```
+
+Express users can use `kakuninExpress()` from the same subpath, which attaches
+`req.kakuninAgent`.
+
+---
+
+## 5. Behavioral Event Ingestion
+
+Send behavioral events to Kakunin's risk engine after each agent action. The
+call returns a risk score synchronously (p99 200 ms):
+
+```typescript
+const result = await kakunin.events.ingest({
+  agentId,
+  actionType: 'transaction_initiated',
+  details: { amount: 4500, currency: 'EUR', counterparty: 'vendor_xyz' },
+  sessionId: 'sess_abc123',           // optional grouping
+  occurredAt: new Date().toISOString(), // defaults to server now()
+});
+
+console.log(result.risk_score);              // 0.12
+console.log(result.risk_band);               // 'low' | 'medium' | 'high'
+console.log(result.revocation_check_queued); // true when band === 'high'
+```
+
+The risk engine scores each event against the agent's rolling 30-day baseline.
+High-band events queue an automatic revocation check.
+
+Supported `actionType` values: `api_call` · `authentication_attempt` · `authentication_failure` · `data_access` · `data_mutation` · `transaction_initiated` · `transaction_anomaly` · `unauthorized_access_attempt` · `message_signed` · `message_verification_failed`
+
+> **Note:** A `transaction_initiated` event that exceeds the agent's certified `financial_scope` is auto-elevated to `unauthorized_access_attempt` by the platform — you don't set that manually.
+
+---
+
+## 6. Webhooks
+
+Kakunin pushes compliance events to your endpoint. Register one via the API
+(or from the dashboard). The response includes the signing secret:
+
+```typescript
+const res = await fetch('https://api.kakunin.ai/v1/webhooks', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    url: 'https://yourapp.com/api/webhooks/kakunin',
+    events: ['certificate.issued', 'certificate.revoked', 'risk.alert'],
+  }),
+});
+const webhook = await res.json();
+console.log(webhook.secret); // whsec_xxxxxxxx — store it
+```
+
+### Verify incoming webhooks
+
+Use `webhooks.constructEvent` with the **raw** body — don't JSON-parse first.
+It verifies the HMAC-SHA256 signature and returns the typed event.
+
+```typescript
+// app/api/webhooks/kakunin/route.ts
+import { NextResponse, type NextRequest } from 'next/server';
+import { kakunin } from '@/lib/kakunin';
+
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  const signature = req.headers.get('x-kakunin-signature') ?? '';
+
+  let event;
+  try {
+    event = await kakunin.webhooks.constructEvent(
+      rawBody,
+      signature,
+      process.env.KAKUNIN_WEBHOOK_SECRET!,
+    );
+  } catch {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 400 });
+  }
+
+  switch (event.event) {
+    case 'certificate.revoked':
+      await handleRevocation((event.data as { agent_id: string }).agent_id);
+      break;
+    case 'risk.alert':
+      await handleRiskAlert(event.data);
+      break;
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+Kakunin retries failed webhook deliveries up to 3 times with exponential backoff.
+
+---
+
+## 7. Public Certificate Verification
+
+Any party can verify an agent certificate against Kakunin's public verify
+endpoint — no API key required. Verify by serial number:
+
+```bash
+curl https://api.kakunin.ai/v1/verify/c4f9-17a2-6b8e
+```
+
+Response:
+
+```json
+{
+  "agent_id": "agt_abc123",
+  "serial_number": "c4f9-17a2-6b8e",
+  "status": "active",
+  "permitted_actions": ["payment:initiate"],
+  "model_hash": "sha256:8f3c...2a91",
+  "issuer": "Kakunin Certificate Authority",
+  "expires_at": "2027-08-26T00:00:00Z"
+}
+```
+
+Build this into any counterparty integration: before accepting a signed payload
+from an agent, verify its certificate is `active` and carries the expected scope.
+
+---
+
+## 8. Testing
+
+Use a `kak_test_` key to hit the sandbox CA — no separate host needed. The same
+client, pointed at the same `baseUrl`, issues **test** certificates:
+
+```typescript
+const sandbox = new Kakunin({ apiKey: process.env.KAKUNIN_TEST_KEY! });
+console.log(sandbox.isSandbox()); // true
+```
+
+Sandbox certificates are real X.509 certificates with the same cryptographic
+properties as production, but are issued by a test root and have no regulatory
+validity — they cannot authenticate against production endpoints. Up to 100 free
+test certs per day.
+
+To exercise revocation flows, ingest a high-risk event (e.g. a
+`transaction_initiated` that exceeds the certified `financial_scope`, which
+auto-elevates to `unauthorized_access_attempt`) and observe the `risk_band` and
+`revocation_check_queued` fields on the response.
+
+---
+
+## 9. Environment Variables Reference
+
+```bash
+# Required
+KAKUNIN_API_KEY=kak_live_xxxxxxxxxxxxxxxx        # or kak_test_ for sandbox
+
+# Optional
+KAKUNIN_BASE_URL=https://api.kakunin.ai/v1       # default
+KAKUNIN_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxx    # from dashboard → Webhooks
+AWS_REGION=eu-west-1                             # KMS region (GDPR)
+```
+
+All secrets go through Doppler (or your secrets manager). Never commit to git.
+
+---
+
+## Tools and Frameworks for KYC Automation in Agentic Workflows
+
+While Kakunin provides an end-to-end identity and behavioral compliance infrastructure, developers often combine multiple tools and frameworks to automate KYC compliance checks in agentic workflows:
+
+- **Cryptographic Key Management:** Instead of writing custom PKI servers, organizations use Hardware Security Modules (HSMs) and cloud-native KMS systems (**AWS KMS**, **Google Cloud KMS**, or **HashiCorp Vault**) to hold agent private keys securely.
+- **Observability & Anomaly Detection:** Standard telemetry collectors (**OpenTelemetry**, **Grafana/Prometheus**, or any OTLP-compatible backend) can ingest agent event streams. However, these require custom alerting policies to compute rolling risk scores compared to Kakunin's built-in 30-day compliance evaluation models.
+- **Model Governance Registries:** Platforms like **Credo AI** or **Arthur AI** catalog LLM weights and pre-deployment safety evaluations. Combining these registries with Kakunin ensures that only verified model versions (mapped by SHA-256 hashes) receive transaction-signing certificates.
+- **Model Context Protocol (MCP):** The [`@kakunin/mcp`](https://www.npmjs.com/package/@kakunin/mcp) server exposes tools (`verify-scope`, `check-risk`, `audit-log`) that let LLM runtimes (LangChain, LlamaIndex, Vercel AI SDK) check permission bounds before executing tool calls.
+
+---
+
+## Next Steps
+
+- [MiCA Trading Bot Quickstart](/docs/mica-trading-bot-quickstart) — end-to-end deployment in 30 min
+- [Agent Security Guide](/docs/agent-security) — threat model and runtime hardening
+- [Supabase Integration](/docs/supabase-integration) — bind cert metadata to RLS policies
+- [API Reference](/docs) — full OpenAPI spec

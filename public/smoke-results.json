@@ -1,0 +1,45 @@
+{
+  "ran_at": "2026-07-07T09:46:33.881Z",
+  "base_url": "https://www.kakunin.ai",
+  "passed": 5,
+  "failed": 0,
+  "skipped": 1,
+  "checks": [
+    {
+      "name": "delegation: issue + verify round-trip",
+      "status": "pass",
+      "detail": "valid token, 2-link chain",
+      "ms": 4639
+    },
+    {
+      "name": "delegation: rejects a tampered token",
+      "status": "pass",
+      "detail": "rejected as expected",
+      "ms": 326
+    },
+    {
+      "name": "content-risk: accepts a submission (202)",
+      "status": "pass",
+      "detail": "enqueued (benign text → scored async, below persist threshold)",
+      "ms": 786
+    },
+    {
+      "name": "forensics: returns a signed proof",
+      "status": "pass",
+      "detail": "forensics export OK",
+      "ms": 1216
+    },
+    {
+      "name": "otlp: connect → status → delete lifecycle",
+      "status": "pass",
+      "detail": "connect/status/delete all OK (cleaned up)",
+      "ms": 2414
+    },
+    {
+      "name": "github gate: returns a decision",
+      "status": "skip",
+      "detail": "mutating — set KAKUNIN_SMOKE_RUN_GATE=1 (throwaway agent only)",
+      "ms": 0
+    }
+  ]
+}

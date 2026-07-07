@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --surface: #f4f1e8;
+  --bg: #ffffff;
+  --border: rgba(20, 24, 27, 0.08);
+  --ink-1: #14181b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Kakunin design tokens */
+  --color-kakunin-heading: #141B1B;
+  --color-kakunin-body: #4A4F52;
+  --color-kakunin-accent: #2B934F;
+  --color-kakunin-accent-dark: #1C6B39;
+  --color-kakunin-subtle-bg: #F4F1E8;
+  --color-kakunin-border: #E5E5E5;
+  --color-kakunin-meta: #8A8C84;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --surface: #232a2e;
+    --bg: #1a1f22;
+    --border: rgba(244, 241, 232, 0.08);
+    --ink-1: #f4f1e8;
+  }
+}
+
+/* Explicit dark mode (via data-theme="dark" attribute) — takes precedence */
+[data-theme="dark"] {
+  --background: #1A1F22;
+  --foreground: #F4F1E8;
+  --surface: #232A2E;
+  --bg: #1A1F22;
+  --border: rgba(244, 241, 232, 0.08);
+  --ink-1: #F4F1E8;
+
+  --color-kakunin-heading: #F4F1E8;
+  --color-kakunin-body: #D0D4D7;
+  --color-kakunin-accent: #4CAA67;
+  --color-kakunin-accent-dark: #5FBB7D;
+  --color-kakunin-subtle-bg: #232A2E;
+  --color-kakunin-border: #2E3539;
+  --color-kakunin-meta: #9FA3A8;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--ff-body, var(--font-geist-sans), Arial, Helvetica, sans-serif);
+}

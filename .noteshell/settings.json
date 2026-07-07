@@ -1,0 +1,50 @@
+{
+  "themeMode": "light",
+  "accentId": "green",
+  "fontFamily": "default",
+  "showHiddenFiles": false,
+  "qmd": {
+    "enabled": true,
+    "collections": [
+      {
+        "name": "workspace",
+        "path": "/Users/PalashBagchi1/Documents/Ai-Automation/KYC",
+        "pattern": "**/*.{md,mdx}"
+      }
+    ],
+    "lastIndexedAt": null,
+    "autoIndex": true
+  },
+  "sources": {
+    "autoCompile": false,
+    "transcription": null
+  },
+  "chat": {
+    "lastOpencodeModel": null
+  },
+  "opencode": {
+    "defaultModel": {
+      "providerID": "opencode",
+      "modelID": "deepseek-v4-flash-free"
+    },
+    "enabledModels": [
+      {
+        "providerID": "opencode",
+        "modelID": "qwen3.6-plus-free"
+      },
+      {
+        "providerID": "opencode",
+        "modelID": "minimax-m2.5-free"
+      },
+      {
+        "providerID": "opencode",
+        "modelID": "deepseek-v4-flash-free"
+      }
+    ]
+  },
+  "sidebarOpen": true,
+  "godmode": false,
+  "experimental": {
+    "canvas": false
+  }
+}

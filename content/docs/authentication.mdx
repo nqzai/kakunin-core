@@ -1,0 +1,53 @@
+---
+title: Authentication
+description: API key validation for all Kakunin endpoints. Bearer tokens, OAuth resource specs, edge middleware security, and how to rotate credentials safely.
+---
+
+## API Keys
+
+Kakunin uses bearer token authentication. All keys are validated in edge middleware before any route handler runs.
+
+```bash
+Authorization: Bearer kk_live_xxxxxxxxxxxxxxxxxxxx
+```
+
+Keys are scoped to a **tenant**. Every request is isolated — no cross-tenant data access is possible.
+
+## Obtaining a Key
+
+API keys are issued from the Kakunin dashboard. Each key is:
+
+- Hashed with SHA-256 before storage — the plaintext is shown once at creation
+- Scoped to your tenant
+- Revocable at any time without affecting other keys
+
+## Request Headers
+
+| Header | Required | Description |
+|---|---|---|
+| `Authorization` | Yes | `Bearer <api_key>` |
+| `Content-Type` | POST/PATCH | `application/json` |
+
+## Errors
+
+| Status | Meaning |
+|---|---|
+| `401` | Missing or invalid API key |
+| `403` | Key exists but lacks permission |
+| `429` | Rate limit exceeded |
+
+## Rate Limiting
+
+Requests are rate-limited per API key using Upstash Redis. Limits are enforced before any database write.
+
+| Tier | Limit |
+|---|---|
+| Starter | 100 req/min |
+| Pro | 500 req/min |
+| Enterprise | Custom |
+
+When rate-limited, the response includes:
+```json
+{ "error": "Rate limit exceeded" }
+```
+with a `429` status and a `Retry-After` header.

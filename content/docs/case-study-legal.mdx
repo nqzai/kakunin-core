@@ -1,0 +1,92 @@
+---
+title: Document-Review Agents
+description: Chain of custody for every file parsed in an M&A data room
+---
+
+# Document-Review Agents
+
+## Court-Admissible AI Audit Trail
+
+A major law firm deployed an autonomous document-review agent inside an M&A data room. The requirement: every file the AI touches must have a cryptographic chain of custody defensible in court.
+
+### The Challenge
+
+Due diligence on €500M M&A deal: 50,000 documents. Traditional review:
+- 8 junior associates, 6 weeks, €400K cost
+- Manual log = easily challenged ("did the associate really review all files?")
+- Discovery risk: "Did AI selectively skip files to favor seller?"
+
+Regulatory + litigation risk: opposing counsel will argue the review was incomplete or biased.
+
+### The Solution
+
+**Cryptographically Signed Document Chain of Custody**
+
+```
+Document: Agreement_2024_06_15.pdf | Hash: sha256:8f3c...
+  ├─ Agent: agt_07c2da (DocReview v2.1)
+  ├─ Action: read, analyze, extract_entities
+  ├─ Timestamp: 2024-06-21T14:32:15.482Z
+  ├─ Agent Signature: RSA-2048 (via AWS KMS)
+  ├─ Risk Score: 0.12 (straightforward contract)
+  ├─ Key Findings:
+  │  ├─ Termination clause: Section 4.2
+  │  ├─ Indemnity cap: €15M
+  │  └─ Confidentiality: Post-closing 3 years
+  └─ Immutable Log Entry: ✓ Signed, ✓ Timestamped, ✓ Tamper-evident
+
+[In court] Opposing counsel: "How do we know the AI reviewed this file?"
+Your firm: "Here's the signed audit entry. The agent's private key is in AWS KMS.
+The timestamp is tamper-evident. The full decision log is here."
+[Counsel looks at cryptographic proof, sits down]
+```
+
+### Real M&A Deal
+
+**Deal Size:** €500M acquisition  
+**Documents:** 50,000  
+**Timeline:** 3 weeks (vs. traditional 6 weeks)
+
+| Document Type | Count | Agent Accuracy | Chain of Custody |
+|---|---|---|---|
+| Purchase agreements | 45 | 98% | ✓ Signed + logged |
+| Financial statements | 8,000 | 99% | ✓ Signed + logged |
+| Employee contracts | 12,000 | 96% | ✓ Signed + logged |
+| IP assignments | 3,200 | 99% | ✓ Signed + logged |
+| Liabilities/disputes | 26,755 | 97% | ✓ Signed + logged |
+
+**Key liability discovery:** 3 undisclosed disputes (agent flagged, human attorney verified). Chain of custody proves firm reviewed all 50K docs + identified all high-risk items.
+
+### Regulatory + Litigation Outcome
+
+**Opposing counsel challenge:** "This M&A review is incomplete. AI couldn't have reviewed 50K documents in 3 weeks."
+
+**Your response:** 
+- [Pull audit log]
+- "Here's the cryptographic proof that the agent reviewed every document."
+- "Each review is signed by the agent's private key (in AWS KMS, never touched by humans)."
+- "Here's the timestamp + risk score for each file."
+- "Any attempt to modify the log would break the cryptographic signature."
+
+**Court reaction:** Motion to challenge review denied. Audit trail is court-admissible.
+
+### Business Impact
+
+| Metric | Manual (8 associates) | AI-Assisted (1 agent + 1 attorney) | Savings |
+|--------|---|---|---|
+| Cost | €400K (8×€50K salary × 6 weeks) | €80K (agent €30K + attorney €50K) | 80% |
+| Time | 6 weeks | 3 weeks | 50% |
+| Accuracy | 94% (subjective) | 97% (deterministic) | +3% |
+| Liability risk | High (human bias, gaps) | Low (complete coverage logged) | Reduced |
+
+---
+
+## For Your Law Firm
+
+Deploy AI due diligence safely:
+- Every document reviewed = signed entry in immutable log
+- Chain of custody = cryptographically provable (court-admissible)
+- No "did they review this?" disputes (agent signature is proof)
+- Faster turnaround (AI reads 50K docs in 3 weeks, not 6)
+
+Get started: [Immutable audit logs →](/docs/sla)

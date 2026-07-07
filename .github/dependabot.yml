@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # App CI/CD workflow actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Main app — security-relevant production updates only, to keep PR noise
+  # manageable for a solo maintainer. SDK/MCP packages are updated in their
+  # own public repos (kakunin-sdk-typescript, kakunin-sdk-python,
+  # kakunin-integrations, kakunin-mcp), not here.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-type: production

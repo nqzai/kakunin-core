@@ -1,0 +1,92 @@
+# Kakunin — Robots Crawling Rules
+# Last updated: 2026-05-23
+
+User-agent: *
+Allow: /
+Allow: /docs
+Allow: /blog
+Allow: /pricing
+Allow: /privacy
+Allow: /terms
+Allow: /.ai/
+Allow: /.well-known/
+
+# Block internal/admin paths
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /.env*
+Disallow: /secrets/
+Disallow: /studio/
+
+# Content Signals — AI content usage preferences (https://contentsignals.org/)
+Content-Signal: ai-train=no, search=yes, ai-input=yes
+
+# Explicit AI crawler allowlist — all receive full public access
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: MistralBot
+Allow: /
+
+User-agent: CohereBot
+Allow: /
+
+User-agent: AmazonBot
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# Search engine sitemaps
+Sitemap: https://www.kakunin.ai/sitemap.xml
+Sitemap: https://www.kakunin.ai/.ai/sitemap.json
+
+# AI systems — additional discovery
+Allow: /.ai/
+Allow: /.ai/*
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+# Rate limiting for aggressive crawlers
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
+
+User-agent: DotBot
+Crawl-delay: 5

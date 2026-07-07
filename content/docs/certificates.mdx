@@ -1,0 +1,89 @@
+---
+title: 'X.509 Certificates'
+description: Kakunin issues X.509 certificates for AI agents using AWS KMS RSA-2048. Private keys never leave the hardware security module.
+lastUpdated: "2026-05-24"
+---
+
+## Overview
+
+Each certificate is an RSA-2048 X.509 certificate issued via AWS KMS in `eu-west-1`. The design guarantees:
+
+- **No key escrow** — private keys are generated inside KMS and never exported
+- **365-day validity** — aligned with MiCA Article 70 requirements
+- **One active cert per agent** — issuing a new cert when one is active returns `409`
+
+## Issuing a Certificate
+
+```bash
+POST /v1/agents/{id}/certify
+```
+
+**Response `201`:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "agent_id": "uuid",
+    "serial_number": "abc123...",
+    "certificate_pem": "-----BEGIN CERTIFICATE-----\n...",
+    "kms_key_arn": "arn:aws:kms:eu-west-1:...",
+    "status": "active",
+    "issued_at": "2026-05-17T00:00:00Z",
+    "expires_at": "2027-05-17T00:00:00Z"
+  }
+}
+```
+
+**Error cases:**
+- `404` — Agent not found or not in tenant scope
+- `409` — Agent already has an active certificate
+- `422` — Agent is retired
+- `503` — KMS credentials not configured
+
+## Revoking a Certificate
+
+Revocation suspends the agent and records a reason. Revoking a certificate that is already revoked or expired returns `409`/`422`.
+
+```bash
+POST /v1/certificates/{id}/revoke
+```
+
+```json
+{
+  "reason": "Anomalous trading behaviour detected by compliance team"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "status": "revoked",
+    "revoked_at": "2026-05-17T10:00:00Z",
+    "revocation_reason": "Anomalous trading behaviour..."
+  }
+}
+```
+
+## AWS KMS Agent Security
+
+To ensure maximum isolation and security, Kakunin utilizes **AWS KMS Agent Security** primitives for certificate signing keys. Instead of storing plaintext private keys in a centralized database:
+1. Ephemeral session key-pairs are generated directly inside AWS KMS Hardware Security Modules (HSMs).
+2. All cryptographic operations (such as signing transaction payloads or authentication requests) are executed inside KMS.
+3. Only the `kms_key_arn` is stored in the database for tracking and reference.
+
+This model guarantees that private key material is never exported, never touched by human operators, and cannot be leaked even in the event of an application-layer database breach.
+
+## Certificate Validity
+
+| Field | Value |
+|---|---|
+| Algorithm | RSA-2048 |
+| Validity | 365 days |
+| Storage | KMS ARN only — no private key in DB |
+| Regulation | MiCA Art. 70 |
+
+## Auto-Revocation
+
+Agents with a risk score ≥ 0.85 trigger an automatic revocation check. See [Event Ingest](/docs/event-ingest) for risk band details.

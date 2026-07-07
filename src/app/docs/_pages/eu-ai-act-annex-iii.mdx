@@ -1,0 +1,347 @@
+export const metadata = {
+  title: "EU AI Act Annex III — High-Risk AI Systems Guide",
+  description: "Complete guide to EU AI Act Annex III high-risk AI categories. What systems qualify, obligations under Articles 9–15, and how autonomous AI agents comply.",
+};
+
+# EU AI Act Annex III: High-Risk AI Systems
+
+The EU AI Act classifies AI systems by risk level. Annex III defines the categories of AI systems considered high-risk — systems that require the most rigorous compliance obligations before deployment in the European Union.
+
+Autonomous AI agents operating in finance, trading, compliance, and regulated infrastructure frequently fall under one or more Annex III categories. This guide explains what qualifies, what compliance requires, and how Kakunin addresses each obligation.
+
+---
+
+## What Is Annex III?
+
+Article 6 of the EU AI Act establishes that AI systems listed in Annex III are automatically classified as high-risk. This classification is independent of how the system is deployed — the category is based on the *purpose and domain* of use.
+
+Annex III contains eight categories:
+
+| No. | Category | Examples |
+|---|---|---|
+| 1 | Biometrics | Facial recognition for identification, emotion recognition |
+| 2 | Critical infrastructure | Traffic management, energy supply, water systems |
+| 3 | Education | Student assessment, admission decision systems |
+| 4 | Employment | CV screening, job application ranking, performance monitoring |
+| 5 | Access to essential services | Credit scoring, insurance risk, housing applications |
+| 6 | Law enforcement | Profiling, polygraphs, crime prediction |
+| 7 | Migration and border control | Asylum processing, document verification |
+| 8 | Justice and democratic processes | Court decision support, electoral material distribution |
+
+For regulated AI agents in finance, **Category 5 (access to essential services)** is the primary concern — specifically credit assessment, insurance risk evaluation, and algorithmic trading systems that affect market access.
+
+---
+
+## Category 5: Access to Essential Services — Finance
+
+The EU AI Act's Annex III, point 5(b) covers AI systems used to evaluate **creditworthiness**, make or influence decisions about **access to financial products**, and assess **insurance risk**.
+
+Algorithmic trading agents that allocate capital, extend credit, determine pricing, or assess counterparty risk fall under this category.
+
+### What qualifies?
+
+- **Trading agents** that make autonomous investment or execution decisions affecting client portfolios
+- **Credit scoring models** that determine lending terms or eligibility
+- **Insurance pricing agents** that produce quotes based on risk assessment
+- **KYC/AML agents** that make identity verification decisions affecting account access
+
+### What does NOT qualify (as high-risk, under Annex III)?
+
+- AI systems used as internal tools that do not directly affect individuals
+- Recommendation systems without binding authority
+- AI used for back-office analytics without decision-making output
+
+---
+
+## Compliance Obligations for High-Risk AI Systems
+
+Articles 9 through 15 set out the substantive requirements for Annex III systems.
+
+### Article 9 — Risk Management System
+
+Operators must establish, implement, document, and maintain a risk management system throughout the AI system's lifecycle.
+
+Required elements:
+- Risk identification and analysis for each intended use case
+- Estimation of risks that could arise from foreseeable misuse
+- Evaluation of remaining risk after mitigation
+- Review after incidents and market surveillance data
+
+**Agent implementation:**
+
+```typescript
+// Kakunin risk management record — maintained per agent
+const riskManagementRecord = {
+  agent_id: agentId,
+  intended_use: 'algorithmic_fx_trading',
+  foreseeable_misuse: [
+    'prompt_injection leading to unauthorised trades',
+    'scope escalation via crafted counterparty data',
+    'baseline drift accumulating over extended period',
+  ],
+  residual_risks: [
+    {
+      risk: 'model hallucination producing invalid trade parameters',
+      mitigation: 'scope policy enforced at certificate layer independent of LLM output',
+      residual: 'low',
+    },
+    {
+      risk: 'compromised container accessing KMS',
+      mitigation: 'KMS key policy restricts access to specific IAM role; no key material in container',
+      residual: 'low',
+    },
+  ],
+  last_reviewed: new Date().toISOString(),
+  reviewed_by: 'compliance@firm.com',
+};
+```
+
+### Article 10 — Data Governance
+
+Training, validation, and testing data must meet specific quality criteria:
+- Relevant, representative, free from errors
+- Appropriate for the intended geographic, contextual, and behavioural setting
+- Examined for possible biases
+
+For agents, this extends to the **behavioural baseline** — the behavioural profile used for anomaly detection must be representative of normal operating conditions and reviewed for bias.
+
+```typescript
+// The behavioral profile Kakunin derives is available via agents.getRisk —
+// use it as the evidentiary basis for your data-governance documentation.
+const risk = await kakunin.agents.getRisk(agentId);
+// risk.drift.drift_score / drift_trend, risk.dominant_band,
+// risk.window_days, risk.high_risk_event_count — the temporal coverage and
+// event profile behind the baseline.
+```
+
+### Article 11 — Technical Documentation
+
+Before deployment, operators must prepare technical documentation demonstrating compliance. Documentation must include:
+
+- General description of the AI system and its intended purpose
+- Design specifications and development process
+- Risk management system documentation (Article 9)
+- Data governance documentation (Article 10)
+- Description of monitoring and post-market surveillance measures
+- Description of measures for human oversight
+
+Kakunin generates an Article 11 technical documentation package on demand:
+
+```typescript
+const technicalDocs = await kakunin.compliance.generateArticle11Package(agentId);
+
+// technicalDocs contains:
+// - agent_registration_record.json    (identity, purpose, operator)
+// - certificate_specification.json    (scope policy, validity, CA chain)
+// - risk_management_summary.pdf       (from Article 9 records)
+// - baseline_data_report.pdf          (from Article 10 records)
+// - monitoring_architecture.pdf       (anomaly detection methodology)
+// - human_oversight_procedures.pdf    (pre-revocation warning → human review flow)
+// - audit_log_extract.jsonl           (sample of logged events with signatures)
+```
+
+### Article 12 — Record-Keeping
+
+High-risk AI systems must automatically log events throughout operation. Logs must:
+- Be automatically generated
+- Cover events that allow tracing back to the input that led to an output
+- Be retained for periods appropriate to the system's purpose
+
+**Kakunin's implementation:**
+
+Every agent action is written to an append-only (WORM) audit log. No application-layer code can modify or delete entries:
+
+```sql
+-- Enforced at PostgreSQL rule level — cannot be bypassed by application code
+CREATE RULE audit_log_no_update AS ON UPDATE TO audit_log DO INSTEAD NOTHING;
+CREATE RULE audit_log_no_delete AS ON DELETE TO audit_log DO INSTEAD NOTHING;
+```
+
+Each record contains:
+- `event_type` — what happened
+- `actor_id` — which agent
+- `affected_id` — which resource was affected
+- `metadata` — full event payload including risk score, signature, anomaly details
+- `created_at` — UTC timestamp
+
+**Retention Period Requirements:**
+- **5-Year Retention:** Standard for financial, trading, and crypto-asset service provider (CASP) bots, directly aligned with MiCA Article 71 and MiFID II forensic audit mandates.
+- **10-Year Retention:** Mandatory for Critical Infrastructure (Category 2) and Justice Administration (Category 8) deployments, satisfying long-term public accountability checks.
+
+### Article 13 — Transparency and Information Provision
+
+High-risk AI systems must be designed to be sufficiently transparent for operators to interpret outputs and use the system appropriately. Instructions for use must include:
+- Identity and contact details of the provider
+- Characteristics, capabilities, and limitations
+- Purpose and intended use
+- Performance metrics and known limitations
+- Human oversight measures
+- Expected lifetime and maintenance
+
+**For agent operators:**
+
+```typescript
+// Kakunin exposes a machine-readable capability card (MCP-compatible)
+const agentCard = await kakunin.agents.getCapabilityCard(agentId);
+
+// agentCard includes:
+// - provider identity (Kakunin + operator)
+// - agent purpose and permitted actions
+// - scope limits (from certificate)
+// - known limitations (e.g., no weekend trading; EUR/USD markets only)
+// - oversight contacts
+// - certificate validity and renewal date
+// - anomaly detection methodology and thresholds
+```
+
+This feeds directly into the `/.well-known/agent.json` endpoint consumed by agent discovery protocols.
+
+### Article 14 — Human Oversight
+
+Operators must ensure humans can:
+1. Understand the AI system's capabilities and limitations
+2. Monitor operation for anomalies and malfunctions
+3. Intervene and interrupt operation when necessary
+4. Override AI decisions
+
+**Kakunin's human oversight architecture:**
+
+```
+Anomaly Score >= 0.75
+       │
+       ▼
+Pre-Revocation Warning (webhook + notification)
+       │
+       ├── Human reviews within grace period (300s default)
+       │         │
+       │         ├── ACKs → monitoring continues, score logged
+       │         └── No ACK → automatic revocation triggered
+       │
+       └── Score >= 0.85 → Automatic revocation (no human required)
+                            Agent halts; replacement spinup queued
+```
+
+Human oversight is available at multiple levels:
+- **Dashboard** — real-time risk score, event feed, one-click revocation
+- **Webhook** — programmatic integration with incident management
+- **API** — `POST /api/v1/agents/{id}/revoke` with audit trail entry
+
+### Article 15 — Accuracy, Robustness, and Cybersecurity
+
+High-risk AI systems must achieve appropriate levels of accuracy, be resilient against errors and third-party attacks, and maintain consistent performance.
+
+Cybersecurity requirements explicitly include:
+- Resilience against model evasion attacks
+- Data poisoning prevention
+- Confidential inputs protection
+- Adversarial prompt injection mitigation
+
+**Controls:**
+
+| Threat | Mitigation |
+|---|---|
+| Model evasion | Scope policy enforced at certificate layer independent of LLM |
+| Data poisoning | Baseline approved by compliance officer; statistical outlier rejection |
+| Input confidentiality | Encrypted in transit (TLS 1.3); inputs not stored beyond audit log |
+| Prompt injection | Tool guard wraps every tool call; validates against scope before execution |
+
+---
+
+## Corporate Board Oversight & Governance Obligations
+
+Deploying an autonomous AI agent in a high-risk category imposes strict administrative governance on the organization's officers and board of directors:
+
+- **Documented Risk Appetite Policies:** The board must review and establish the threshold bands for automated agent shutdown (auto-revocation limits).
+- **Incident Reporting Frameworks:** If an agent is auto-revoked due to a security incident or baseline drift, the compliance officer is legally required to report the event to the national supervisory authority (e.g. the European AI Office) within **15 days**.
+- **Algorithmic Accountability Mandate:** The management board retains legal responsibility for decisions made by autonomous intermediaries, meaning they must verify that quarterly compliance reports are reviewed and signed off by qualified personnel.
+
+---
+
+## Conformity Assessment
+
+Before placing a high-risk AI system on the EU market, operators must complete a conformity assessment. For Annex III systems not in the law enforcement or biometrics categories, **self-assessment** is permitted (no third-party notified body required).
+
+Kakunin's compliance report provides the artefacts needed for self-assessment:
+
+```typescript
+const conformityAssessment = await kakunin.compliance.generateConformityPackage(agentId);
+
+// Package structure:
+// 1. Technical documentation (Article 11)
+// 2. Risk management records (Article 9)
+// 3. QMS evidence (Article 17) — if provider obligations apply
+// 4. Human oversight procedures (Article 14)
+// 5. Cybersecurity controls evidence (Article 15)
+// 6. Audit log samples (Article 12)
+// 7. EU Declaration of Conformity template
+```
+
+---
+
+## CE Marking and Registration
+
+After conformity assessment, high-risk AI systems must:
+
+1. **Affix CE marking** — indicating EU conformity
+2. **Register in the EU AI Act database** — public registry of high-risk AI systems (managed by European AI Office)
+
+Kakunin generates the registration data package required by Article 49 and the EU AI Act database entry format.
+
+---
+
+## Post-Market Surveillance
+
+Article 72 requires providers to have a post-market monitoring system that:
+- Actively and systematically collects and reviews data on system performance
+- Assesses whether the system continues to meet requirements
+- Reports serious incidents to national supervisory authorities within specified timeframes
+
+**Reporting obligations:**
+- Serious incident: within 15 days of provider becoming aware
+- Malfunction with serious incident risk: within 10 working days
+
+Kakunin sends automated incident notifications when:
+- Anomaly score exceeds 0.85 (auto-revocation triggered)
+- Certificate revocation occurs
+- Any action is taken outside the declared scope
+
+---
+
+## Sanctions and Enforcement
+
+Non-compliance with Annex III obligations carries significant penalties under Article 99:
+
+| Violation | Maximum Fine |
+|---|---|
+| Prohibited AI system or non-compliance with Annex III obligations | €35M or 7% of global annual turnover |
+| Other obligations (transparency, record-keeping, oversight) | €15M or 3% of global annual turnover |
+| Providing incorrect information to authorities | €7.5M or 1% of global annual turnover |
+
+For SMEs and startups, lower of the absolute amount or the turnover percentage applies.
+
+---
+
+## Practical Implementation Checklist
+
+Before deploying an Annex III agent:
+
+- [ ] Classify the agent against Annex III categories (particularly Category 5 for finance)
+- [ ] Document the risk management system (Article 9)
+- [ ] Document data governance for baseline and training data (Article 10)
+- [ ] Prepare technical documentation (Article 11)
+- [ ] Configure automatic logging with WORM retention (Article 12)
+- [ ] Publish capability documentation to operators (Article 13)
+- [ ] Implement human oversight with pre-revocation warning workflow (Article 14)
+- [ ] Deploy scope enforcement and anti-injection controls (Article 15)
+- [ ] Complete conformity assessment
+- [ ] Register in the EU AI Act database
+- [ ] Establish post-market surveillance and incident reporting procedures
+
+---
+
+## What's Next?
+
+- **[EU AI Act Compliance Roadmap](/blog/eu-ai-act-compliance-roadmap-high-risk-ai-systems)** — phase-by-phase implementation plan
+- **[Agent Security Guide](/docs/agent-security)** — technical controls for Article 15 cybersecurity obligations
+- **[KYC for AI Agents](/docs/kyc-for-ai-agents)** — ongoing monitoring equivalent to Articles 9 and 12
+- **[Compliance Reports](/dashboard)** — generate your Article 11 technical documentation package

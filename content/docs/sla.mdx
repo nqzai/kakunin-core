@@ -1,0 +1,112 @@
+---
+title: Verify Endpoint SLA & Failover
+description: Uptime commitments for the verify endpoint and certificate issuance. SLA tiers, incident response times, and SDK failover patterns.
+---
+
+Every call to your enforcement gateway hits `GET /v1/verify/:serial`. This page documents
+the uptime commitment for that endpoint and how the SDK behaves if it is unreachable.
+
+## SLA
+
+| Phase | Uptime target | Measurement window |
+|-------|--------------|-------------------|
+| Pilot | 99.9% | Rolling 30 days |
+| GA | 99.95% | Rolling 30 days |
+
+Uptime is measured by Better Stack synthetic monitors pinging `/v1/verify/probe`
+every 30 seconds from three regions (EU, US-East, AP). Incidents are declared when
+two or more regions fail simultaneously.
+
+Status page: [kakunin.openstatus.dev](https://kakunin.openstatus.dev/)
+
+## SDK Failover Behaviour
+
+The `@kakunin/sdk/verify` middleware has three layers of protection against verify API outages:
+
+### Layer 1 — In-process cache (always active)
+
+Every verified certificate is cached in-process for `cacheTtlMs` (default: 60 s).
+A cache hit never hits the network. At 1 000 req/s with a warm cache, 99%+ of requests
+are served without a network call.
+
+### Layer 2 — Stale cache fallback (opt-in)
+
+Enable `staleCacheFallback: true` to serve a stale cache entry when the verify API is
+unreachable. The stale window is 5× `cacheTtlMs` (default: 5 minutes).
+
+```typescript
+const verifier = createVerifier({
+  staleCacheFallback: true,  // serve stale on API outage
+  cacheTtlMs: 60_000,        // fresh window: 60s; stale window: 5min
+});
+```
+
+During the stale window the SDK continues enforcing the **last known** cert status.
+A cert that was active when last verified is served as active. A cert that was revoked
+is never in the cache — revoked certs are evicted immediately by `invalidate()`.
+
+### Layer 3 — Timeout policy (fail-closed or fail-open)
+
+Configure what happens when the API is unreachable **and** there is no cache entry:
+
+```typescript
+// Default: fail-closed — request is blocked with 503
+const verifier = createVerifier({
+  onVerifyTimeout: 'fail-closed',  // default
+  verifyTimeoutMs: 5_000,          // default 5s
+});
+
+// Alternative: fail-open — request passes through (agent is null)
+const verifier = createVerifier({
+  onVerifyTimeout: 'fail-open',
+  staleCacheFallback: true,        // recommended when fail-open
+});
+```
+
+| Policy | Behaviour on outage | When to use |
+|--------|---------------------|-------------|
+| `fail-closed` (default) | Returns 503 — all uncached agents blocked | Regulated environments where a bypass is worse than downtime |
+| `fail-open` | Request passes through; `agent` is null | High-availability systems where downtime of Kakunin must not block trading |
+
+**Recommended configuration for financial pilots:**
+
+```typescript
+// Balances availability with security: stale window covers typical outages (<5min)
+// fail-closed kicks in only if the outage outlasts the stale window
+const verifier = createVerifier({
+  cacheTtlMs: 60_000,
+  staleCacheFallback: true,
+  onVerifyTimeout: 'fail-closed',
+  verifyTimeoutMs: 3_000,
+});
+```
+
+## Request Timeout
+
+The default request timeout is **5 000 ms**. Adjust with `verifyTimeoutMs`:
+
+```typescript
+createVerifier({ verifyTimeoutMs: 2_000 }); // 2s for latency-sensitive gateways
+```
+
+## Webhook-Driven Instant Revocation
+
+The SDK cache is designed to coexist with real-time revocation. When you receive a
+`certificate.revoked` webhook, call `handleRevocationWebhook()` to immediately evict
+the cert from the local cache — even within the TTL window:
+
+```typescript
+import { createVerifier, handleRevocationWebhook } from '@kakunin/sdk/verify';
+
+const verifier = createVerifier({ staleCacheFallback: true });
+
+// POST /webhooks/kakunin
+app.post('/webhooks/kakunin', (req, res) => {
+  handleRevocationWebhook(verifier, req.body);
+  res.sendStatus(200);
+});
+```
+
+This ensures that a cert revoked via the kill switch is blocked on the next request,
+regardless of the cache TTL. The stale fallback will never serve a revoked cert because
+revoked certs are evicted from the stale window too.

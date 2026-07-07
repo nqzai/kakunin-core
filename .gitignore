@@ -1,0 +1,120 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# secrets — never commit credentials, access keys, or recovery codes
+*.csv
+# P0 content-risk pilot dry-run reports — contain raw agent message text
+content-risk-report-*.json
+*accessKeys*
+*_credentials*
+*recovery-codes*
+*recovery_codes*
+
+# local-only folders — strategy docs, cost models, design files, credentials
+Documents/
+Marketing/
+/Kakunin/
+Design-System/
+data/
+CLAUDE.md
+
+# internal planning, guidelines, and analysis docs — local only, never push
+BLOG_*.md
+SANITY_*.md
+DELIVERABLES_*.md
+README_BLOG_*.md
+*-gap-analysis.md
+nqzai-kakunin-wiki-*.md
+# whole top-level /docs/ tree is internal (public product docs live in
+# content/docs and src/app/docs). Was /docs/*.md — nested drafts
+# (ai-governance-drafts, cla-staging) escaped that direct-child pattern.
+/docs/
+# OSS sprint working docs (strategy advisory, CLA staging, pentest report) —
+# local organization only, never push. See OSS/README.md.
+/OSS/
+CODEBASE_REVIEW_*.md
+__tests__/*.md
+AGENTS.md
+TODOS.md
+# strategy / advisory / internal report markdown at repo root
+*_Advisory.md
+*_Strategy_*.md
+refactoring-report.md
+*-report.md
+# competitive analysis, decks, and other office docs — never push
+*.docx
+*.pptx
+*.xlsx
+# one-off build/patch artifacts
+*.patch
+# throwaway scripts + SEO outreach work products
+/scratch/
+/scripts/seo/
+# local pentest run output (logs contain keys + endpoints) + scratch instructions
+/strix_runs/
+strix-instructions*.md
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — block all except .env.example (which has no real values)
+.env
+.env.*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# fumadocs — generated at build time, not checked in
+/.source
+.gstack/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.venv/
+.vercel
+
+# sub-repositories
+kakunin-samples/
+
+node_modules 2/
+.agents/
+.claude/
+coverage/
+
+# never track a node_modules symlink
+node_modules

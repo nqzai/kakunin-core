@@ -1,0 +1,118 @@
+---
+title: Webhooks
+description: "Subscribe to real-time events: certificate issuance, revocation, high-risk alerts, behavioral anomalies, lifecycle changes."
+---
+
+## Overview
+
+Kakunin can push events to your systems in real time via webhooks. This is how you build reactive workflows: auto-blocking a revoked agent at your gateway, alerting your compliance team on high-risk events, or syncing certificate status to your internal registry.
+
+## Registering a Webhook
+
+```bash
+POST /v1/webhooks
+```
+
+```json
+{
+  "url": "https://your-system.com/webhooks/kakunin",
+  "events": ["certificate.revoked", "agent.high_risk"],
+  "description": "Production compliance handler"
+}
+```
+
+**Response `201`:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "url": "https://your-system.com/webhooks/kakunin",
+    "events": ["certificate.revoked", "agent.high_risk"],
+    "secret": "whsec_xxxxxxxxxxxxxxxx",
+    "active": true,
+    "created_at": "2026-05-17T00:00:00Z"
+  }
+}
+```
+
+<Callout type="warn">
+The `secret` is shown once at creation. Store it securely — you need it to verify webhook signatures.
+</Callout>
+
+## Event Types
+
+| Event | Trigger |
+|---|---|
+| `certificate.issued` | New X.509 certificate issued for an agent |
+| `certificate.revoked` | Certificate explicitly revoked |
+| `certificate.expired` | Certificate passed its `expires_at` |
+| `agent.high_risk` | Agent risk score crossed `≥ 0.85` threshold |
+| `agent.created` | New agent registered |
+| `agent.suspended` | Agent status changed to `suspended` |
+
+## Webhook Payload
+
+All events share a common envelope:
+
+```json
+{
+  "id": "evt_uuid",
+  "event": "certificate.revoked",
+  "created_at": "2026-05-17T10:00:00Z",
+  "data": {
+    "serial_number": "abc123",
+    "agent_id": "uuid",
+    "revocation_reason": "Anomalous behaviour detected",
+    "revoked_at": "2026-05-17T10:00:00Z"
+  }
+}
+```
+
+## Verifying Signatures
+
+Every webhook request includes an `X-Kakunin-Signature` header. Verify it to confirm the payload came from Kakunin.
+
+```ts
+import crypto from 'crypto';
+
+function verifyWebhook(payload: string, signature: string, secret: string): boolean {
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(`sha256=${expected}`)
+  );
+}
+
+// In your webhook handler:
+const raw = await req.text();
+const sig = req.headers.get('x-kakunin-signature') ?? '';
+if (!verifyWebhook(raw, sig, process.env.KAKUNIN_WEBHOOK_SECRET!)) {
+  return new Response('Unauthorized', { status: 401 });
+}
+```
+
+## Delivery and Retries
+
+Kakunin delivers webhooks via **QStash** with the following guarantees:
+
+- **3 automatic retries** on non-2xx responses
+- **Exponential backoff** between retries (1s, 10s, 100s)
+- **Delivery timeout:** 30 seconds per attempt
+- Delivery history visible at `GET /v1/webhooks/{id}/deliveries`
+
+<Callout type="info">
+Your endpoint must return a `2xx` response within 30 seconds. Return `200` immediately and process asynchronously if your handler takes longer.
+</Callout>
+
+## Listing and Managing Webhooks
+
+```bash
+GET    /v1/webhooks              # list all webhooks
+GET    /v1/webhooks/{id}         # get one webhook
+PATCH  /v1/webhooks/{id}         # update url, events, or active status
+DELETE /v1/webhooks/{id}         # delete webhook
+GET    /v1/webhooks/{id}/deliveries  # delivery history
+```

@@ -1,0 +1,238 @@
+---
+title: AI Agent Quickstart
+description: Integrate any AI agent with Kakunin in under 15 minutes. Cryptographic identity, behavioral monitoring, and compliance-ready audit trails.
+---
+
+Kakunin gives your AI agent a cryptographic identity, behavioral risk score, and immutable audit trail — everything regulators require under MiCA and EU AI Act.
+
+**Integration takes 3 steps:** register → certify → log events. Under 15 minutes from zero to a monitored agent.
+
+---
+
+## Prompt Handover
+
+Copy this prompt into any AI coding agent (Claude Code, Cursor, Copilot) to build the integration from scratch:
+
+```
+You are integrating an AI agent with Kakunin — a KYC compliance platform for AI agents.
+
+Base URL: https://kakunin.ai/api/v1
+Auth: Bearer token — set KAKUNIN_API_KEY env var
+Docs: https://kakunin.ai/docs/api-reference
+
+Complete these 3 steps:
+
+1. Register the agent:
+POST /agents
+Body: { name, model_hash, model, version, permitted_actions[] }
+Save the returned agent.id
+
+2. Issue X.509 certificate:
+POST /agents/{id}/certify
+Returns: { certificate_pem, serial_number, expires_at }
+Store cert_pem for mTLS — it expires in 365 days
+
+3. Log behavioral events (call after every significant action):
+POST /events
+Body: { agent_id, action_type, metadata }
+action_type options: api_call | authentication_attempt | authentication_failure | data_access | data_mutation | transaction_initiated | transaction_anomaly | unauthorized_access_attempt | message_signed | message_verification_failed
+
+Test against sandbox first:
+- Base URL: https://www.kakunin.ai/api/v1 (same endpoint — sandbox is key-based, not URL-based)
+- Use a `kak_test_...` key from your dashboard (Dashboard → Developer → API Keys → Create test key)
+- Test certs are real X.509 but have no regulatory validity; sandbox data auto-deletes after 7 days
+
+MCP alternative (Node.js only):
+npx @kakunin/mcp with env: KAKUNIN_API_KEY + KAKUNIN_AGENT_ID
+Tools: verify_agent_scope, check_risk_score, audit_log_append
+```
+
+---
+
+## Pick Your Path
+
+### Node.js / TypeScript — SDK
+
+```bash
+npm install @kakunin/sdk
+```
+
+```typescript
+import { Kakunin } from '@kakunin/sdk';
+
+const kkn = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+// 1. Register
+const agent = await kkn.agents.create({
+  name: 'My Trading Bot v1.0',
+  model_hash: await Kakunin.computeModelHash('gpt-4o-2024-08'),
+  model: 'gpt-4o',
+  version: 'v1.0.0',
+  permitted_actions: ['transaction_initiated', 'data_access'],
+});
+
+// 2. Certify
+const cert = await kkn.agents.certify(agent.id);
+console.log(cert.serial_number);
+
+// 3. Log events
+await kkn.events.ingest({
+  agent_id: agent.id,
+  action_type: 'transaction_initiated',
+  metadata: { symbol: 'BTC/USDT', side: 'buy', amount_usd: 5000 },
+});
+```
+
+### Python — REST API
+
+```python
+import os, hashlib, requests
+
+BASE = "https://kakunin.ai/api/v1"
+HEADERS = {
+    "Authorization": f"Bearer {os.environ['KAKUNIN_API_KEY']}",
+    "Content-Type": "application/json",
+}
+
+## 1. Register
+agent = requests.post(f"{BASE}/agents", json={
+    "name": "My Python Bot v1.0",
+    "model": "gpt-4o",
+    "version": "v1.0.0",
+    "permitted_actions": ["data_access", "data_mutation"],
+}, headers=HEADERS).json()["data"]
+
+## 2. Certify
+cert = requests.post(f"{BASE}/agents/{agent['id']}/certify",
+    headers=HEADERS).json()["data"]
+
+## 3. Log event
+requests.post(f"{BASE}/events", json={
+    "agent_id": agent["id"],
+    "action_type": "data_access",
+    "metadata": {"resource": "customer_records", "count": 42},
+}, headers=HEADERS)
+```
+
+### Any Runtime — REST
+
+```bash
+## 1. Register
+curl -X POST https://kakunin.ai/api/v1/agents \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Agent","model":"gpt-4o","version":"v1.0.0","permitted_actions":["data_access"]}'
+
+## 2. Certify (use returned agent id)
+curl -X POST https://kakunin.ai/api/v1/agents/$AGENT_ID/certify \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY"
+
+## 3. Log event
+curl -X POST https://kakunin.ai/api/v1/events \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"$AGENT_ID","action_type":"data_access","metadata":{}}'
+```
+
+---
+
+## Action Types
+
+| `action_type` | When to use |
+|---|---|
+| `api_call` | Agent calls an external API |
+| `authentication_attempt` | Agent attempts to authenticate to an external service |
+| `authentication_failure` | Agent fails to authenticate to an external service |
+| `data_access` | Agent reads customer records, databases, files |
+| `data_mutation` | Agent creates, updates, or deletes records |
+| `transaction_initiated` | Agent places orders, initiates transfers |
+| `transaction_anomaly` | Anomalous transaction behaviour detected |
+| `unauthorized_access_attempt` | Agent attempted an action outside its permitted scope |
+| `message_signed` | Agent signed a message with its private key |
+| `message_verification_failed` | Agent failed to verify a signed message |
+
+Log **every** significant action. Kakunin computes a rolling 30-day risk score — missing events skew the score.
+
+---
+
+## Risk Scores
+
+After logging events, check risk band:
+
+```typescript
+const { risk_score, risk_band } = await kkn.agents.getRiskScore(agent.id);
+// risk_band: 'low' | 'medium' | 'high'
+// risk_score: 0.0 – 1.0
+```
+
+| Band | Score | Action |
+|---|---|---|
+| low | < 0.3 | Continue operating normally |
+| medium | 0.3 – 0.75 | Review unusual patterns |
+| high | ≥ 0.75 | Pre-revocation warning sent; address immediately |
+
+Score ≥ 0.85 triggers auto-revocation check.
+
+---
+
+## MCP Integration (Node.js)
+
+If your agent uses the Model Context Protocol, skip the SDK and use `@kakunin/mcp` instead:
+
+```bash
+npm install @kakunin/mcp
+## or: npx @kakunin/mcp (no install needed)
+```
+
+Three tools available: `verify_agent_scope`, `check_risk_score`, `audit_log_append`.
+
+→ See [MCP Server docs](/docs/mcp) for full reference.
+
+---
+
+## Test in Sandbox First
+
+Before using production keys:
+
+```bash
+## 1. Get a test key
+# Dashboard → Developer → API Keys → Create test key (kak_test_... prefix)
+
+## 2. Use test key — same endpoint as production
+export KAKUNIN_API_KEY=kak_test_...
+export KAKUNIN_BASE_URL=https://www.kakunin.ai/api/v1
+```
+
+Sandbox is key-based — same API endpoint, `kak_test_...` key flags the request as test. Test data auto-deletes after 7 days.
+
+→ See [Sandbox docs](/docs/sandbox) for full reference.
+
+---
+
+## Reference Implementations
+
+| Agent | Pattern | Language |
+|---|---|---|
+| HTTP tool-using agent | Full lifecycle test (register → certify → events → risk) | TypeScript |
+| Event harness | 100+ events, throughput test | TypeScript |
+| Discord bot | Interactive slash commands | TypeScript |
+| Freqtrade bot | Python trading bot integration | Python |
+
+→ Run locally: `npm run agent:http-tool` · `npm run agent:event-harness` · `npm run agent:discord`
+
+→ See [Freqtrade integration guide](/docs/quickstart-freqtrade) for the Python trading bot pattern.
+
+---
+
+## Checklist Before Going Live
+
+- [ ] Agent registered with accurate `permitted_actions`
+- [ ] X.509 certificate issued and stored
+- [ ] Events logged for all action types your agent performs
+- [ ] Risk score checked after each session
+- [ ] Webhook configured for `certificate.revoked` alerts
+- [ ] Sandbox smoke test passed (all 3 steps green)
+
+---
+
+Next: [API Reference](/docs/api-reference) · [MCP Server](/docs/mcp) · [Sandbox](/docs/sandbox) · [Freqtrade Guide](/docs/quickstart-freqtrade)

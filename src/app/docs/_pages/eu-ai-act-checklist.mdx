@@ -1,0 +1,383 @@
+export const metadata = {
+  title: "EU AI Act Implementation Checklist — Per-Article Code Guide",
+  description: "Article-by-article implementation checklist for AI agent deployments. Includes code snippets, API calls, and verification commands for each EU AI Act obligation.",
+};
+
+# EU AI Act Implementation Checklist
+
+This checklist maps each EU AI Act article to concrete implementation steps with Kakunin. Work through it sequentially when onboarding a high-risk AI system. Each item includes the specific API call or code pattern that satisfies the obligation.
+
+For the conceptual overview, see [KYC for AI Agents](/docs/kyc-for-ai-agents). For the article-to-feature mapping table, see [Regulatory Mapping Matrix](/docs/kyc-regulatory-mapping).
+
+---
+
+## Article 9 — Risk Management System
+
+**Obligation:** Continuously identify, analyse, evaluate, and mitigate risks throughout the system lifecycle.
+
+- [ ] **Register the agent with metadata** — creates the permanent identity record
+
+```typescript
+const agent = await kakunin.agents.create({
+  name: 'loan-decisioning-v3',
+  metadata: {
+    version: '3.1.0',
+    model: 'claude-3-5-sonnet',
+    framework: 'langchain@0.2.1',
+    operator: 'Acme Bank SA',
+    purpose: 'credit_risk_assessment',
+    annex_iii_category: 'creditworthiness',  // Article 6(2) high-risk category
+  },
+});
+```
+
+- [ ] **Behavioral baseline forms automatically** — no manual setup; Kakunin derives the normal operating envelope from ingested events over a rolling 30-day window. Read it via `agents.getRisk`:
+
+```typescript
+const risk = await kakunin.agents.getRisk(agent.id);
+console.log(risk.dominant_band, risk.drift.drift_score);
+```
+
+- [ ] **Enable risk scoring on every event** — real-time evaluation against baseline
+
+```typescript
+// After each agent decision (actionType must be one of the platform's event
+// types — a credit decision is a data_mutation):
+const score = await kakunin.events.ingest({
+  agentId: agent.id,
+  actionType: 'data_mutation',
+  details: { decision: 'credit_assessment', outcome: 'approved', score: 0.72 },
+});
+
+// score.risk_score < 0.3  → low
+// score.risk_score >= 0.3 → medium  (log for review)
+// score.risk_score >= 0.75 → pre-revocation warning
+// score.risk_score >= 0.85 → auto-revocation
+```
+
+---
+
+## Article 10 — Data Governance
+
+**Obligation:** Training data must be relevant, representative, and free from errors that could affect compliance.
+
+- [ ] **Record dataset provenance in agent metadata**
+
+```typescript
+await kakunin.agents.update(agent.id, {
+  metadata: {
+    ...agent.metadata,
+    training_dataset: {
+      name: 'eu-credit-dataset-2025',
+      version: '4.2',
+      hash_sha256: 'a3f8c91d...',      // hash of dataset at training time
+      bias_audit_ref: 'AUDIT-2025-047',
+      last_validated: '2026-03-01',
+    },
+  },
+});
+```
+
+- [ ] **Log any model updates** — create a new agent version record on each update
+
+```typescript
+// Don't mutate the existing agent — create a new version
+const agentV4 = await kakunin.agents.create({
+  name: 'loan-decisioning-v4',  // bump version
+  metadata: { ...updatedMetadata, supersedes: agent.id },
+});
+```
+
+---
+
+## Article 11 — Technical Documentation
+
+**Obligation:** Technical documentation proving conformity must be drawn up before the system is placed on the market.
+
+- [ ] **Export the compliance documentation bundle** before go-live
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/compliance/bundle \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "agent_abc123",
+    "regulations": ["eu-ai-act"],
+    "format": "pdf"
+  }'
+
+# Returns signed S3 URL to ZIP containing:
+# - Certificate chain PEM
+# - Signed metadata snapshot
+# - Regulatory mapping index
+# - Behavioral baseline profile
+```
+
+- [ ] **Store documentation bundle reference in your records system**
+- [ ] **Schedule quarterly refresh** — regulatory documentation must stay current
+
+---
+
+## Article 12 — Automatic Logging
+
+**Obligation:** High-risk AI systems must automatically log events sufficient to post-incident reconstruction.
+
+- [ ] **Wire event ingestion into every decision path**
+
+```typescript
+// Middleware pattern — runs before any agent action reaches your business logic
+async function withAuditLog<T>(
+  agentId: string,
+  actionType: string,
+  fn: () => Promise<T>,
+  metadata?: Record<string, unknown>
+): Promise<T> {
+  const start = Date.now();
+  let result: T;
+  let error: unknown;
+
+  try {
+    result = await fn();
+    return result;
+  } catch (e) {
+    error = e;
+    throw e;
+  } finally {
+    await kakunin.events.ingest({
+      agentId,
+      actionType,
+      details: {
+        ...metadata,
+        duration_ms: Date.now() - start,
+        outcome: error ? 'error' : 'success',
+        error_code: error instanceof Error ? error.message : undefined,
+      },
+    });
+  }
+}
+
+// Usage:
+const decision = await withAuditLog(
+  agent.id,
+  'decision.credit_assessment',
+  () => runCreditModel(application),
+  { application_id: application.id }
+);
+```
+
+- [ ] **Verify log immutability** — confirm WORM storage is active for your project
+
+```bash
+curl https://api.kakunin.ai/v1/project/storage-policy \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY"
+# Expect: { "worm": true, "retention_days": 1825 }  (5 years, Article 12 minimum)
+```
+
+---
+
+## Article 13 — Transparency
+
+**Obligation:** High-risk AI systems must be designed so that operation is sufficiently transparent for users to interpret the output.
+
+- [ ] **Attach reasoning trace to each event** — enables human-readable audit trail
+
+```typescript
+await kakunin.events.ingest({
+  agentId: agent.id,
+  actionType: 'data_mutation',
+  details: {
+    decision: 'credit_assessment',
+    reasoning_summary: decision.chain_of_thought_summary,
+    input_features_used: ['income', 'debt_ratio', 'employment_duration'],
+    confidence: 0.87,
+    human_readable_explanation: 'Approved based on income:debt ratio of 3.2, stable employment >2 years.',
+  },
+});
+```
+
+- [ ] **Expose audit log query endpoint for your compliance team**
+
+```typescript
+// The WORM audit log is queryable via the API for your compliance team.
+const params = new URLSearchParams({
+  agent_id: agentId,
+  from: '2026-01-01',
+  to: '2026-05-28',
+  limit: '1000',
+});
+const logs = await fetch(`https://api.kakunin.ai/v1/audit-log?${params}`, {
+  headers: { Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}` },
+}).then((r) => r.json());
+```
+
+---
+
+## Article 14 — Human Oversight
+
+**Obligation:** High-risk AI systems must be designed to be effectively overseen by natural persons.
+
+- [ ] **Implement instant pause capability**
+
+```typescript
+// Route for your internal admin panel:
+export async function POST(req: NextRequest) {
+  const { agentId, reason } = await req.json();
+  await kakunin.agents.pause(agentId, { reason, pausedBy: adminUserId });
+  // All further agent API calls return 403 until resumed
+  return NextResponse.json({ status: 'paused' });
+}
+```
+
+- [ ] **Implement certificate revocation for full stop**
+
+```typescript
+await kakunin.certificates.revoke(agentId, {
+  reason: 'human_override',
+  revokedBy: adminUserId,
+  incidentRef: 'INC-2026-0042',
+});
+// Revocation propagates via CRL/OCSP in < 100 ms
+```
+
+- [ ] **Set up high-risk decision thresholds requiring human co-sign**
+
+```typescript
+// Human-in-the-loop lives in your own gateway. Kakunin gives you the primitive
+// to pause an agent's authority while a human reviews, then resume or revoke.
+// (Exposed as agents.halt on the Python client; POST /v1/agents/{id}/halt.)
+if (decision.amount > humanApprovalThreshold) {
+  await fetch(`https://api.kakunin.ai/v1/agents/${agentId}/halt`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason: 'pending_human_review' }),
+  });
+  await notifyCompliance(decision);   // your own notification channel
+  return { status: 'pending_human_review' };
+}
+```
+
+---
+
+## Article 15 — Accuracy, Robustness, Cybersecurity
+
+**Obligation:** High-risk AI systems must achieve appropriate levels of accuracy; must be resilient to errors, faults, and inconsistencies.
+
+- [ ] **Issue X.509 certificate via KMS** — cryptographic identity, no plaintext keys
+
+```typescript
+// Scope (permitted_actions / financial_scope) is set at agent creation and
+// encoded in the certificate; certify() issues it. The private key is generated
+// inside AWS KMS and never leaves the HSM.
+const cert = await kakunin.agents.certify(agent.id);
+
+// certificate_pem is passed to the agent at runtime (public, safe to embed).
+const { certificate_pem, serial_number } = cert;
+```
+
+- [ ] **Enforce scope at every API call**
+
+```python
+# Python SDK
+@verify_agent_scope(required_scope="decision:credit_assessment")
+async def run_credit_model(application: Application) -> Decision:
+    ...
+```
+
+- [ ] **Configure automatic revocation thresholds**
+
+```typescript
+await kakunin.project.setRiskPolicy({
+  preRevocationWarning: 0.75,   // triggers webhook + notification
+  autoRevocation: 0.85,          // immediate certificate revocation
+  anomalyWindowMinutes: 60,      // rolling window for score calculation
+});
+```
+
+---
+
+## Article 17 — Quality Management System
+
+**Obligation:** Providers of high-risk AI systems shall put a quality management system in place.
+
+- [ ] **Record governance metadata on the agent**
+
+```typescript
+await kakunin.agents.update(agent.id, {
+  metadata: {
+    governance: {
+      board_approved_date: '2026-04-15',
+      approver_name: 'Chief Risk Officer',
+      next_review_date: '2026-10-15',
+      change_control_ref: 'CCR-2026-019',
+    },
+  },
+});
+```
+
+- [ ] **Schedule automated compliance reports**
+
+```typescript
+// Weekly compliance digest sent to your team
+await kakunin.reports.schedule({
+  agent_ids: [agent.id],
+  frequency: 'weekly',
+  recipients: ['cro@yourcompany.com', 'compliance@yourcompany.com'],
+  include: ['risk_score_trend', 'decision_volume', 'anomaly_count', 'cert_expiry'],
+});
+```
+
+---
+
+## Extraterritorial Compliance for US-Based Operators (Article 22/25)
+
+The EU AI Act has strict extraterritorial reach. If your organization is based in the US (or outside the EU) but your AI agents serve EU customers or place high-risk systems on the EU market, you must satisfy the following checklist items:
+
+- [ ] **Appoint an Authorized Representative in the EU (Article 25):** Under Article 25, non-EU providers must establish an authorized representative based in the EU who retains the required conformity documentation (Article 11 package) for 10 years and serves as the point of contact for regulators.
+- [ ] **Implement Local Data Residency Controls:** Ensure that agent transactional telemetry and behavioral logs respect EU data storage requirements (e.g., configuring AWS `eu-west-1` or tenant-isolated EU databases to comply with GDPR cross-border transfer limits).
+- [ ] **Establish Recipient Disclosure Flows (Article 13):** Integrate client-facing transparency tools. If an agent initiates a financial or algorithmic onboarding action, the system must clearly notify the user that they are interacting with an AI agent.
+
+---
+
+## Pre-Go-Live Verification Commands
+
+Run these before every production deployment:
+
+```bash
+# 1. Confirm agent is registered and active
+curl https://api.kakunin.ai/v1/agents/$AGENT_ID \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  | jq '{id, name, status, metadata}'
+
+# 2. Confirm certificate is valid and not expired
+curl https://api.kakunin.ai/v1/agents/$AGENT_ID/certificate \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  | jq '{status, serial_number, expires_at, scope}'
+
+# 3. Confirm WORM logging is enabled
+curl https://api.kakunin.ai/v1/project/storage-policy \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  | jq '.worm'  # must be true
+
+# 4. Confirm behavioral baseline is set
+curl https://api.kakunin.ai/v1/agents/$AGENT_ID/baseline \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  | jq '.configured'  # must be true
+
+# 5. Test revocation round-trip
+curl -X POST https://api.kakunin.ai/v1/sandbox/simulate-revocation \
+  -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+  -d "{\"agent_id\": \"$AGENT_ID\"}" \
+  | jq '.propagation_ms'  # must be < 1000
+```
+
+---
+
+## Related
+
+- [Regulatory Mapping Matrix](/docs/kyc-regulatory-mapping) — article-to-feature reference table
+- [EU AI Act Annex III](/docs/eu-ai-act-annex-iii) — high-risk system categories deep dive
+- [Agent Security Guide](/docs/agent-security) — runtime threat model and hardening
+- [KYC Integration Guide](/docs/kyc-integration) — SDK setup and API reference

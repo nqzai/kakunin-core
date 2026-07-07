@@ -1,0 +1,104 @@
+---
+title: OTLP Observability Export
+description: "Stream agent risk scores, events, and decision-chain traces to your own observability stack — Datadog, Grafana, Honeycomb, or Splunk — over vendor-neutral OpenTelemetry (OTLP)."
+---
+
+## Overview
+
+Kakunin already watches your agents. The OTLP exporter puts that signal where your team already looks: your own observability platform. Because it speaks **vendor-neutral OpenTelemetry over HTTP/JSON**, one connection feeds Datadog, Grafana, Honeycomb, Splunk, or any OTLP-compatible collector — no per-vendor integration.
+
+This is the **visibility** pillar: see your agents in the tools you already run, then pivot from an APM trace straight to the certificate that governs the agent.
+
+| Signal | What you get |
+|---|---|
+| **Metrics** | `kakunin.agent.risk_score` (gauge, tagged `risk_band`), `kakunin.agent.events_total`, `kakunin.agent.drift_score`, `kakunin.cert.status`, `kakunin.revocations_total` |
+| **Logs** | Behavioural events with their risk `factors[]`, redacted per logging rules |
+| **Traces** | Decision chains rendered as traces — each event is a span, the chain is a trace, with `cert_serial` as a span attribute |
+
+## Connecting an exporter
+
+```bash
+POST /v1/integrations/otlp
+```
+
+```json
+{
+  "endpoint_url": "https://otlp.your-vendor.com",
+  "headers": { "x-vendor-team": "kakunin" },
+  "api_key": "your-otlp-ingest-key",
+  "config": { "service_name": "kakunin-agents" }
+}
+```
+
+**Response `200`:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "provider": "otlp",
+    "endpoint_url": "https://otlp.your-vendor.com",
+    "enabled": true
+  }
+}
+```
+
+The `endpoint_url` is validated against an SSRF guard on every write (HTTPS only; private, loopback, and link-local ranges are rejected). Your `api_key` and custom `headers` are sealed with AES-256-GCM and **never returned** by the API.
+
+<Callout type="info">
+`api_key` is sent as `Authorization: Bearer <key>` on each export. If your collector authenticates differently, put the header in the `headers` map instead.
+</Callout>
+
+## Checking status
+
+```bash
+GET /v1/integrations/otlp
+```
+
+```json
+{
+  "data": {
+    "configured": true,
+    "provider": "otlp",
+    "endpoint_url": "https://otlp.your-vendor.com",
+    "enabled": true,
+    "last_sync": "2026-05-30T10:00:00Z",
+    "error_message": null
+  }
+}
+```
+
+Secrets are never included in the status response.
+
+## Testing the connection
+
+```bash
+POST /v1/integrations/otlp/test
+```
+
+Sends a tiny synthetic metrics payload to your collector immediately (not via the async queue) and reports whether it was accepted — instant feedback for setup.
+
+```json
+{ "data": { "ok": true, "status": 200 } }
+```
+
+## Disconnecting
+
+```bash
+DELETE /v1/integrations/otlp
+```
+
+Disables the connection. Stored credentials are retired.
+
+## How export runs
+
+- **Trigger:** a periodic cron sweep reads rows since `last_sync` per connection, batches them, and ships them. There is no per-event push — urgency is owned by the risk engine (auto-revoke) and alert channels, not the observability path.
+- **Idempotent:** span and trace IDs are derived deterministically from event and decision-chain UUIDs, so QStash retries never duplicate spans.
+- **Redaction:** PII redaction runs before anything leaves Kakunin.
+
+<Callout type="warn">
+**Decision-chain traces are forward-going.** Backends drop spans older than their ingest lookback window, so historical chains export as logs and metrics rather than traces. New chains export as traces from the moment the exporter is connected.
+</Callout>
+
+## The trace pivot
+
+The reason this sells the control-plane story: each behavioural event carries `cert_serial` as a span attribute. In your own APM, click a suspicious agent trace and jump directly to the X.509 certificate — and the scope — that authorised it.

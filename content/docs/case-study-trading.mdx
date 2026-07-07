@@ -1,0 +1,84 @@
+---
+title: Quantitative Trading Agents
+description: How autonomous FX trading bots stay compliant while executing €50M+ daily
+---
+
+# Quantitative Trading Agents
+
+## Autonomous FX Trading at Scale
+
+A tier-1 EU bank launched an autonomous FX trading agent with Kakunin. The system executes up to €50M/day within scope, continuously monitored for behavioral drift.
+
+### The Challenge
+
+Traditional trading desks execute ~200 trades/day. Automation promised 10x volume, but regulators required:
+- Cryptographic proof of agent identity
+- Real-time behavioral boundaries
+- Revocation in sub-second latencies
+- Full audit trail (every trade, every decision)
+
+### The Solution
+
+**Kakunin Certificate Binding**
+
+```
+Agent Identity: agt_8f3c2a (FX Trading v2.1)
+  ├─ X.509 Cert Serial: c4f9-17a2-6b8e
+  ├─ Permitted Actions: execute_trade, read_rates, write_logs
+  ├─ Scope: EUR/USD ≤ €50M per trade
+  ├─ Valid Until: 2027-04-11
+  └─ Risk Threshold: 0.85 (auto-revoke)
+```
+
+Every trade execution:
+1. Agent signs trade via AWS KMS private key
+2. Counterparty verifies signature against Kakunin cert (sub-500ms)
+3. Trade accepted only if cert is valid + in scope
+4. Event logged immutably (WORM storage)
+
+### Real-Time Behavioral Monitoring
+
+Rolling 30-day risk score tracks:
+- **Execution latency anomalies** — trades slower than baseline
+- **Position sizing drift** — trades larger than historical average
+- **Market condition violations** — executing during stressed markets
+- **Counterparty concentration** — overexposure to single exchange
+
+When risk score crossed 0.85 (1 week into production):
+- ✅ Revocation fired automatically
+- ✅ Webhook sent to compliance team
+- ✅ All-calls halted within 60ms
+- ✅ No unauthorized trades executed
+
+### Regulatory Outcome
+
+**MiCA Art. 67–75 Compliance**
+
+Auditors tested:
+- Trade replay: Agent can prove every decision with full input/output chain ✅
+- Risk bypass: Attempted direct execution without approval → blocked ✅
+- Data integrity: Inject bad rate data → system rejects ✅
+- Message spoofing: Fake "approved" message → invalid signature ✅
+
+**Result:** Zero violations, zero findings.
+
+### Business Impact
+
+| Metric | Before | After | Lift |
+|--------|--------|-------|------|
+| Daily trades | ~200 | 2,000+ | 10x |
+| Settlement time | 2h (manual) | 4min (automated) | 30x faster |
+| Operational cost | €50K/month (2 traders) | €8K/month (platform) | 84% reduction |
+| Audit prep time | 6 weeks | 3 hours | 56x faster |
+| Compliance violations | 2-3/quarter | 0 | Eliminated |
+
+---
+
+## For Your Trading Operation
+
+Deploy autonomous agents without surrendering:
+- Operational control (revocation in ≤100ms)
+- Regulatory defensibility (every trade auditable)
+- Behavioral safety (drift detection active 24/7)
+
+Get started: [Certify your trading agent →](/docs/agents)

@@ -1,0 +1,92 @@
+---
+title: Getting Started
+description: Kakunin issues cryptographic identities to AI agents, monitors their behaviour, and generates MiCA/EU AI Act compliance reports — all via a single API.
+---
+
+## What is Kakunin?
+
+Kakunin is compliance infrastructure purpose-built for AI agents. It provides:
+
+- **X.509 certificates** — cryptographic identity issued via AWS KMS. Private keys never leave the HSM.
+- **Behaviour monitoring** — stream events from your agent, receive real-time risk scores.
+- **Compliance reports** — auto-generated PDF reports aligned with MiCA Article 70 and EU AI Act.
+- **Agent inboxes** — secure email inboxes provisioned automatically after certification.
+
+<Cards>
+  <Card title="Core Concepts" href="/docs/concepts" description="How X.509 certs and behavioral monitoring make AI agents auditable." />
+  <Card title="Agents" href="/docs/agents" description="Register and manage AI agents as first-class compliance resources." />
+  <Card title="Certificates" href="/docs/certificates" description="Issue and revoke X.509 identities backed by AWS KMS." />
+  <Card title="Verify" href="/docs/verify" description="Real-time cert status checks — Kakunin's OCSP equivalent." />
+</Cards>
+
+## Quickstart
+
+<Steps>
+<Step>
+
+### Create an agent
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/agents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "trading-bot-prod", "model": "gpt-4o", "version": "1.0.0" }'
+```
+
+</Step>
+<Step>
+
+### Issue a certificate
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/agents/{id}/certify \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+The response includes:
+- `serial_number` — unique certificate identifier
+- `certificate_pem` — X.509 PEM for mutual TLS
+- `expires_at` — 365-day validity (MiCA Art. 70)
+
+</Step>
+<Step>
+
+### Stream behaviour events
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/events \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "YOUR_AGENT_ID",
+    "action_type": "tool_call",
+    "payload": { "tool": "web_search", "query": "EUR/USD" }
+  }'
+```
+
+</Step>
+<Step>
+
+### Generate a compliance report
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/reports/compliance \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "agent_id": "YOUR_AGENT_ID", "window_days": 30 }'
+```
+
+Reports are generated asynchronously. Poll `GET /v1/reports/{id}` until `status` is `ready`, then fetch the PDF at `GET /v1/reports/{id}/pdf`.
+
+</Step>
+</Steps>
+
+## Environments
+
+| Environment | Base URL |
+|---|---|
+| Production | `https://api.kakunin.ai/v1` |
+
+<Callout type="info">
+All endpoints require an API key passed as `Authorization: Bearer <key>`. API keys are issued from the [Kakunin dashboard](https://www.kakunin.ai/dashboard/api-keys).
+</Callout>

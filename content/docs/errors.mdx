@@ -1,0 +1,110 @@
+---
+title: Error Handling & Troubleshooting
+description: Complete Kakunin troubleshooting guide. Step-by-step resolution steps for common integration mistakes, empty scopes, rate limits, and KMS errors.
+---
+
+## Error Response Format
+
+All Kakunin errors return a standard JSON object containing a descriptive string:
+
+```json
+{
+  "error": "Descriptive explanation of the error condition."
+}
+```
+
+> [!IMPORTANT]
+> **Production Best Practice**: Do not match/parse the literal `error` string in your application logic. Strings may be updated for clarity. Always branch your code logic using the standard **HTTP Status Code**.
+
+---
+
+## Troubleshooting Guide & Resolution Steps
+
+Below are the most common error states encountered during SDK integration, along with their root causes and concrete fix procedures.
+
+### 1. Certificate Scope is Empty (Actions Not Authorized)
+
+* **Symptom**: Your integration fails during pre-flight checks (`allowed = false`) even though you defined scopes. When inspecting the agent or certificate metadata, the scope list is empty.
+* **Root Cause**: You registered the agent using the legacy metadata parameter `"scopes"` instead of the required **`"permitted_actions"`** key.
+* **Resolution Steps**:
+  1. Locate the agent creation code (e.g. `client.agents.create(...)`).
+  2. Modify the `metadata` payload structure to map actions under `permitted_actions`:
+     ```diff
+     // ❌ INCORRECT legacy mapping
+     metadata: {
+     -  scopes: ["trade.execute", "market.read"]
+     }
+     
+     //  CORRECT v1 mapping
+     metadata: {
+     +  permitted_actions: ["trade.execute", "market.read"]
+     }
+     ```
+  3. Re-register the agent or update its metadata, then call `/certify` again.
+
+---
+
+### 2. Tenant Boundary Isolation Conflict (`404 Not Found` or `403 Forbidden`)
+
+* **Symptom**: Calls to `/agents/{id}` or `/events` return `404 Not Found` even though the Agent ID exists in your code.
+* **Root Cause**: You are executing requests using an API key that belongs to a different Tenant than the one that registered the target agent. Under Kakunin RLS (Row Level Security) rules, resources outside your tenant scope are treated as non-existent to prevent scanning.
+* **Resolution Steps**:
+  1. Verify the environment variables loading `KAKUNIN_API_KEY`.
+  2. Match the key prefix: Sandbox keys (`kak_test_...`) and Live keys (`kak_live_...`) belong to separate databases. An agent registered in Sandbox cannot be fetched with a Live key.
+  3. Log the `tenant_id` returned during agent registration to ensure it aligns with your client configuration.
+
+---
+
+### 3. AWS KMS Service Failures (`503 Service Unavailable`)
+
+* **Symptom**: Issuing a certificate (`POST /agents/{id}/certify`) or signing a delegation chain returns a `503` status with the error: `"KMS signing service unavailable"`.
+* **Root Cause**: The Kakunin Certificate Authority encountered a timeout or credential connection failure while attempting to reach AWS KMS in `eu-west-1`.
+* **Resolution Steps**:
+  * This error is transient. Implement a retry strategy with **exponential backoff**:
+    ```ts
+    async function certifyWithRetry(agentId: string, retries = 3, delay = 1000) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const cert = await client.agents.certify(agentId);
+          return cert;
+        } catch (err) {
+          if (i === retries - 1) throw err;
+          await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+        }
+      }
+    }
+    ```
+
+---
+
+### 4. Rate Limiting (`429 Too Many Requests`)
+
+* **Symptom**: Rapid event ingestion or risk-checking calls are blocked with a `429` status.
+* **Root Cause**: The client exceeded the allowed request throughput on Upstash Redis rate limit counters.
+* **Resolution Steps**:
+  1. Check the response headers to inspect limits and reset timings:
+     ```http
+     X-RateLimit-Limit: 1000       # Max allowed requests in the window
+     X-RateLimit-Remaining: 0     # Available requests
+     Retry-After: 15              # Seconds you must wait before retrying
+     ```
+  2. In your API client, check the `Retry-After` header value and schedule execution to pause:
+     ```ts
+     if (res.status === 429) {
+       const retryAfterSeconds = parseInt(res.headers.get('Retry-After') || '1', 10);
+       await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000));
+       // Resubmit request
+     }
+     ```
+
+---
+
+### 5. Auto-Revocation Triggers on Anomaly Spikes
+
+* **Symptom**: An agent suddenly returns `status: "revoked"` and certificate verification fails.
+* **Root Cause**: The real-time behavioral risk engine detected an event scoring `≥ 0.85` (e.g. prompt injection, unauthorized bulk asset transfer) and triggered the AWS KMS-backed automatic cert revocation "kill switch".
+* **Resolution Steps**:
+  1. Inspect the agent's recent event stream via the dashboard to identify the high-risk action.
+  2. Once the security vulnerability is resolved, update the agent profile status back to `pending`.
+  3. Re-issue the certificate by invoking `client.agents.certify(agentId)` (this generates a new certificate with a fresh serial number).
+

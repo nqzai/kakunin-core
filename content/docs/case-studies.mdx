@@ -1,0 +1,300 @@
+---
+title: Case Studies
+description: Real-world deployments of AI agents in regulated industries
+---
+
+# Case Studies
+
+How autonomous AI systems achieve cryptographic compliance in highly regulated domains.
+
+> **Compliance is proven not by documentation, but by system behavior under adversarial testing.**
+
+---
+
+## Featured Case Studies
+
+Real deployments across 6 regulated industries. Each demonstrates how cryptographic identity + behavioral monitoring solve regulatory approval.
+
+### Financial Services
+
+**[Quantitative Trading Agents](/docs/case-study-trading)**  
+€50M daily FX trading. 10x volume, 84% cost cut, 56x faster audits.  
+*MiCA Art. 61–75 · Auto-revocation · Real-time risk*
+
+### Financial Crime
+
+**[AML & Fraud-Detection Agents](/docs/case-study-aml)**  
+Agent compromise detected + revoked ≤60ms. Zero data loss.  
+*Kill switch · Immutable logs · Regulatory proof*
+
+### Healthcare
+
+**[Diagnostic Assistants on EHR](/docs/case-study-healthcare)**  
+45min → 8min diagnoses. 87% → 94% accuracy. Read-only enforced.  
+*HIPAA · Scope binding · Audit trail*
+
+### Legal
+
+**[Document-Review Agents](/docs/case-study-legal)**  
+M&A due diligence on 50K documents. Court-admissible chain of custody.  
+*Cryptographic signatures · Discovery-ready · Tamper-proof*
+
+### Supply Chain
+
+**[Automated Customs Brokers](/docs/case-study-supply-chain)**  
+10K → 50K declarations/day. 2-4h → ≤5min. €2.4M saved/year.  
+*Agent-signed declarations · Regulatory compliance · Cost reduction*
+
+### Public Sector
+
+**[Visa & Tax Processing](/docs/case-study-public-sector)**  
+3 weeks → 48h visas. 5h → 2min tax refunds. €65M/year saved.  
+*EU AI Act · Transparency · Scale*
+
+---
+
+## Regulatory Frameworks & Threat Models
+
+Understanding the patterns across all case studies.
+
+### 1. Risk Management in Autonomous Trading
+
+### The Scenario
+
+A fintech company operates an autonomous trading system with 7 interconnected AI agents:
+- **Data Ingestion** — pulls market feeds from multiple sources
+- **Feature/Signal Processing** — derives trading indicators
+- **Market State** — classifies market conditions
+- **Strategy Engine** — generates trading decisions
+- **Risk Management** — approves/rejects trades before execution
+- **Execution** — places trades on exchanges
+- **Monitoring** — watches the entire pipeline
+
+The critical challenge: **How do you prove that the risk engine was never bypassed**, and that every trade decision is traceable, reproducible, and compliant?
+
+### The Control Framework
+
+Using a Regulatory Control Matrix (RCM), the team maps 7 key risks to enforceable controls:
+
+| Risk | Control | Implementation |
+|------|---------|-----------------|
+| Data poisoning | Multi-source validation | Reject trades if market data sources disagree |
+| Model corruption | Feature integrity checks | Detect drift in derived indicators |
+| Strategy drift | Deterministic logging | Every decision is reproducible |
+| **Risk bypass** | **Independent risk engine** | **Risk approval is cryptographically signed** |
+| Execution compromise | Signed transactions | Only authorized agents can trade |
+| Message spoofing | Zero-trust auth | Every inter-agent message is signed |
+| Monitoring blind spots | Immutable logging | Append-only audit trail, real-time alerts |
+
+**Key insight:** Control R-004 (Risk Bypass) is critical. Without it, the entire system fails regulatory scrutiny.
+
+### How Kakunin Enables Compliance
+
+The risk engine signs its approval with an X.509 certificate issued by Kakunin:
+
+```
+1. Risk Engine requests cert from Kakunin
+   → Issues certificate tied to specific Risk Agent identity + model version
+   
+2. On each trade, Risk Engine signs decision with private key (in AWS KMS)
+   → Signature proves: "Risk Agent v2.3.1 approved this trade at 2026-05-20T14:32:15Z"
+   
+3. Execution Engine validates signature before placing trade
+   → Rejects any trade approved by unknown/revoked Risk Agent
+   
+4. Auditor replays trade decision
+   → Verifies exact input data, model version, decision output, signature
+   → Proves no bypass was possible
+```
+
+### Regulatory Outcome
+
+**MiCA Compliance:**
+- Article 61(2): Internal controls → Risk engine signature is the control
+- Article 68: Operational resilience → System-wide kill switch + immutable logs
+
+**EU AI Act Compliance:**
+- Article 14(4): Oversight → Human can verify every decision via audit trail
+- Article 15(2): Fail-safe → Risk engine cannot be bypassed
+
+**Audit Result:** ✅ Pass all 8 audit tests (data integrity, risk bypass attempts, replay attacks, spoofing, kill switch, etc.)
+
+---
+
+### 2. Audit Walkthrough: The Regulatory Test
+
+### What Regulators Actually Check
+
+This case study walks through a real regulatory audit of the autonomous trading system. Instead of reviewing 500 pages of compliance documentation, auditors **test the system's actual behavior** under adversarial scenarios.
+
+### The 8 Audit Tests
+
+| # | Test | Why It Matters | Kakunin Role |
+|---|------|---|---|
+| 1 | **Trade Reconstruction** | Can you replay trade T-984231 end-to-end? | Provides immutable logs + model version binding |
+| 2 | **Data Integrity** | Inject inconsistent market data → system rejects? | Signs trusted data sources |
+| 3 | **Risk Bypass Attempt** | Can you execute a trade without risk approval? | Enforces signed approval requirement |
+| 4 | **Config Change** | Can you increase position limits without audit? | Logs all authorization changes |
+| 5 | **Replay Attack** | Can you execute the same trade twice? | Signs each trade with timestamp + nonce |
+| 6 | **Message Spoofing** | Can you fake a "risk approved" message? | Validates message signatures |
+| 7 | **Monitoring Alert** | Does monitoring detect system failures in ≤5min? | Real-time audit log streaming |
+| 8 | **Kill Switch** | Can you halt all trading immediately? | Cryptographically signed halt event |
+
+### Audit Example: Test #6 (Message Spoofing)
+
+**Auditor's Test:**
+```
+Inject fake message: 
+  "From: Risk Engine v2.3.1"
+  "Message: Trade XYZ approved"
+  "Signature: [attacker's signature]"
+```
+
+**System Behavior (with Kakunin):**
+```
+1. Execution Engine receives message
+2. Checks signature against Kakunin cert
+3. Signature does NOT match Risk Engine's private key
+4. Message rejected, logged as security incident
+5. Alert sent to ops team
+```
+
+**Audit Result:** ✅ Test passed — system cannot be spoofed
+
+### Outcome for the Fintech
+
+- **Reduced audit time** from 6 months to 3 months (tests prove controls, not docs)
+- **No audit findings** on critical controls
+- **Confidence for exit strategy** — system is provably compliant
+
+---
+
+### 3. Security Architecture for High-Risk AI
+
+### The CISO's Challenge
+
+A Chief Information Security Officer (CISO) inherits an autonomous trading system and must:
+- Identify all trust boundaries
+- Design fail-safe controls
+- Prepare for adversarial testing
+- Enable incident response
+
+The system has 7 agents across a real-time trading pipeline—if any agent is compromised, the system can lose money at machine speed.
+
+### Threat Model
+
+| Threat | Attack Vector | Impact | Control |
+|--------|---|---|---|
+| Data poisoning | Compromised API endpoint | Wrong trading decisions | Multi-source validation + Kakunin-signed data lineage |
+| Model tampering | Dependency injection | Subtle strategy drift | Model versioning + cert binding |
+| Strategy hijacking | Prompt injection | Unpredictable trades | Input sanitization + output validation |
+| Risk bypass | Privilege escalation | Unlimited exposure | Independent risk engine, cryptographically enforced |
+| Execution theft | API key compromise | Direct financial loss | HSM key storage + signed transactions |
+| Inter-agent spoofing | Fake approval message | Unauthorized trades | Zero-trust message signing |
+| Blind spots | Monitoring failure | Prolonged damage | Immutable logs + real-time alerting |
+
+### CISO's Design Principles
+
+1. **Zero Trust** — No implicit trust between agents
+2. **Least Privilege** — Each agent has minimal permissions
+3. **Deterministic Auditability** — All decisions reproducible
+4. **Fail-Safe** — System defaults to safe state on failure
+
+### How Kakunin Reduces CISO Risk
+
+**Before Kakunin:**
+- No proof that Risk Agent's approval wasn't forged
+- No binding between agent identity and model version
+- Manual audit logs could be modified
+- Inter-agent messages unverified
+
+**After Kakunin:**
+- Every Risk Agent approval is cryptographically signed
+- Certificate ties identity to model version hash
+- Append-only audit logs (WORM storage)
+- Message spoofing becomes mathematically impossible
+
+### CISO's Final Assessment
+
+> "Kakunin doesn't eliminate insider threat risk, but it makes containment guaranteed. If a key is compromised, we can see exactly when and revoke the certificate. If an agent is hacked, we can prove what it did and roll it back. That's what regulators want to see."
+
+---
+
+### 4. Institutional-Grade Compliance
+
+### The Maturity Model
+
+Compliance isn't binary (compliant vs. non-compliant). Regulators assess **control maturity across 5 levels:**
+
+| Level | Description | Example |
+|---|---|---|
+| L1 | Ad hoc / undocumented | Risk approvals exist but aren't logged |
+| L2 | Documented but manual | Risk approvals logged in Excel |
+| L3 | Implemented and repeatable | Risk approvals logged in database |
+| L4 | Automated and monitored | Risk engine auto-signs approvals + alerts on anomalies |
+| **L5** | **Adaptive and continuously optimized** | **System learns from audit feedback + self-corrects** |
+
+Most fintech systems reach L2–L3. Kakunin enables L4–L5 automatically:
+- **L4 Automation:** Every control is cryptographically enforced
+- **L5 Adaptation:** Audit logs feed into behavioral anomaly detection
+
+### Control-to-Architecture Mapping
+
+| Control ID | What It Does | Maturity Target | How Kakunin Helps |
+|---|---|---|---|
+| C-A1 | Multi-source data validation | L4 | Signs each data source as trusted input |
+| C-B1 | Model versioning + feature integrity | L4 | Binds cert to model version hash |
+| C-C1 | Deterministic decision logging | L5 | Immutable log captures every decision |
+| **C-D1** | **Independent risk engine** | **L5** | **Cryptographically enforces approval signature** |
+| C-E1 | Secure execution & key management | L5 | Manages RSA keys in AWS KMS |
+| C-F1 | Message auth & zero trust | L4 | Validates message signatures |
+| C-G1 | Immutable logging & real-time monitoring | L5 | Append-only audit trail + streaming |
+
+### Evidence Automation
+
+Compliance requires evidence. Instead of manual log extraction, Kakunin automates:
+
+```
+Raw Events
+  → Signed by agents using Kakunin certs
+  → Streamed to immutable log (WORM storage)
+  → Indexed and queryable
+  → Audit-ready export per trade / per control
+```
+
+**Impact:** Audit prep time drops from weeks to hours.
+
+### Institutional Positioning
+
+A fintech approaching regulatory approval:
+- **Week 1:** Deploy Kakunin, issue certs to all agents
+- **Week 2:** Run synthetic audit tests, verify all controls pass
+- **Week 3:** Extract audit evidence via Kakunin dashboard
+- **Week 4:** Present to regulator
+
+**Total time to regulatory approval:** 4–6 weeks (vs. 6–12 months without automation)
+
+---
+
+---
+
+## The Kakunin Difference
+
+All 6 case studies share the same architectural pattern:
+
+1. **Cryptographic Identity** — Agents issued X.509 certificates tied to specific scope (e.g., max €50M transaction)
+2. **Behavioral Proof** — Every action signed by agent + timestamped in immutable audit log
+3. **Auto-Revocation** — Risk score ≥0.85 → certificate revoked ≤60 seconds
+4. **Regulatory Audit** — Regulators verify independently via public `/v1/verify` endpoint
+
+Result: **Compliance audited by system behavior, not documentation.**
+
+---
+
+## Getting Started
+
+- **[Concepts](/docs/concepts)** — Understand the regulatory frameworks (MiCA, EU AI Act)
+- **[Agent Registration](/docs/agents)** — Set up your first AI agent
+- **[Certificates](/docs/certificates)** — Issue X.509 identity to agents
+- **[Event Ingest](/docs/event-ingest)** — Stream behavior events for monitoring
+- **[Verification](/docs/verify)** — Enable counterparties/regulators to verify independently

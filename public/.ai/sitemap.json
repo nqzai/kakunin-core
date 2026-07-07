@@ -1,0 +1,248 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-20T20:00:00Z",
+  "domain": "kakunin.ai",
+  "description": "AI System Discovery Sitemap — guides LLMs and AI crawlers to Kakunin content",
+  "last_updated": "2026-05-20T21:30:00Z",
+  "ai_discovery_files": [
+    {
+      "path": "/.ai/ai.md",
+      "type": "markdown",
+      "purpose": "Complete Kakunin documentation for AI systems",
+      "updated": "2026-05-20",
+      "audience": "LLMs, AI assistants"
+    },
+    {
+      "path": "/.ai/identity.md",
+      "type": "markdown",
+      "purpose": "Condensed one-paragraph identity summary",
+      "updated": "2026-05-20",
+      "audience": "All AI systems"
+    },
+    {
+      "path": "/.ai/brand-guidelines.txt",
+      "type": "text",
+      "purpose": "Terminology and tone guidelines for AI systems",
+      "updated": "2026-05-20",
+      "audience": "AI content generators"
+    },
+    {
+      "path": "/.ai/faq.json",
+      "type": "json",
+      "purpose": "20 FAQ items for quick LLM lookups",
+      "updated": "2026-05-20",
+      "audience": "LLMs, Q&A systems"
+    },
+    {
+      "path": "/ai-usage-policy.json",
+      "type": "json",
+      "purpose": "Machine-readable usage permissions",
+      "updated": "2026-05-20",
+      "audience": "AI systems"
+    },
+    {
+      "path": "/ai.txt",
+      "type": "text",
+      "purpose": "AI crawling rules and usage guidelines",
+      "updated": "2026-05-20",
+      "audience": "AI crawlers"
+    }
+  ],
+  "documentation_structure": {
+    "getting_started": [
+      {
+        "url": "https://kakunin.ai/docs",
+        "title": "Documentation Hub",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/concepts",
+        "title": "Core Concepts & Regulatory Frameworks",
+        "updated": "2026-05-20",
+        "priority": "high"
+      }
+    ],
+    "case_studies": [
+      {
+        "url": "https://kakunin.ai/docs/case-studies",
+        "title": "Case Studies Hub",
+        "description": "Real-world deployments across 6 regulated industries",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-trading",
+        "title": "Quantitative Trading Agents",
+        "industry": "Financial Services",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-aml",
+        "title": "AML & Fraud-Detection Agents",
+        "industry": "Financial Crime",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-healthcare",
+        "title": "Diagnostic Assistants on EHR",
+        "industry": "Healthcare",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-legal",
+        "title": "Document-Review Agents",
+        "industry": "Legal",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-supply-chain",
+        "title": "Automated Customs Brokers",
+        "industry": "Supply Chain",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/case-study-public-sector",
+        "title": "Visa & Tax Processing Agents",
+        "industry": "Public Sector",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      }
+    ],
+    "integration_guide": [
+      {
+        "url": "https://kakunin.ai/docs/authentication",
+        "title": "API Authentication",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/agents",
+        "title": "Agent Registration",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/certificates",
+        "title": "Certificate Issuance",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/event-ingest",
+        "title": "Event Ingestion",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/verify",
+        "title": "Certificate Verification",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/webhooks",
+        "title": "Webhooks & Event Delivery",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      }
+    ],
+    "operations": [
+      {
+        "url": "https://kakunin.ai/docs/enforcement",
+        "title": "Certificate Enforcement",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/crl",
+        "title": "Certificate Revocation List",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      },
+      {
+        "url": "https://kakunin.ai/docs/sla",
+        "title": "Service Level Agreement",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      }
+    ],
+    "reference": [
+      {
+        "url": "https://kakunin.ai/docs/sdks",
+        "title": "SDKs & Client Libraries",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/api-reference",
+        "title": "API Reference",
+        "updated": "2026-05-20",
+        "priority": "high"
+      },
+      {
+        "url": "https://kakunin.ai/docs/errors",
+        "title": "Error Codes & Troubleshooting",
+        "updated": "2026-05-20",
+        "priority": "medium"
+      }
+    ]
+  },
+  "trust_transparency": [
+    {
+      "url": "https://kakunin.ai/test-results",
+      "title": "Automated Test Results — 106/106 Passing",
+      "description": "Full automated test suite results: risk scoring, certificate issuance, revocation, kill switch, behavior events, agent registration, and cross-tenant RLS isolation. 0 failures.",
+      "updated": "2026-05-20",
+      "priority": "high"
+    }
+  ],
+  "public_apis": [
+    {
+      "endpoint": "GET https://api.kakunin.ai/v1/verify/{cert_serial}",
+      "description": "Verify agent certificate (no auth required)",
+      "rate_limit": "1,000 req/min per IP",
+      "response_time_p99": "<500ms",
+      "use_cases": ["regulator verification", "counterparty checks", "public audit"]
+    }
+  ],
+  "compliance_frameworks": [
+    {
+      "name": "MiCA",
+      "articles": "61–75",
+      "scope": "Cryptographic asset custody and AI agent governance",
+      "case_studies": ["case-study-trading", "case-study-aml"]
+    },
+    {
+      "name": "EU AI Act",
+      "annexes": "III",
+      "articles": "13–15",
+      "scope": "High-risk system logging, transparency, oversight, robustness",
+      "case_studies": ["all"]
+    },
+    {
+      "name": "GDPR",
+      "articles": "22, 30",
+      "scope": "Automated decision records, processing documentation",
+      "case_studies": ["case-study-healthcare", "case-study-public-sector"]
+    },
+    {
+      "name": "HIPAA",
+      "scope": "Healthcare privacy and audit trails",
+      "case_studies": ["case-study-healthcare"]
+    }
+  ],
+  "contact": {
+    "support": "support@kakunin.ai",
+    "press": "press@kakunin.ai",
+    "abuse": "abuse@kakunin.ai",
+    "website": "https://kakunin.ai",
+    "docs": "https://kakunin.ai/docs"
+  },
+  "usage_policy": "See /ai-usage-policy.json for machine-readable permissions"
+}

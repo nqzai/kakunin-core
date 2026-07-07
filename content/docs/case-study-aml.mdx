@@ -1,0 +1,92 @@
+---
+title: AML & Fraud-Detection Agents
+description: Catch compromised agents before the breach completes
+---
+
+# AML & Fraud-Detection Agents
+
+## God-Mode Agents Under Constant Watch
+
+A major EU bank deployed an autonomous AML screening agent with god-mode access to customer records. The risk: if compromised, the agent could exfiltrate sensitive data in milliseconds. Kakunin provides automatic kill-switch protection.
+
+### The Challenge
+
+Anti-money laundering (AML) agents need broad access:
+- Read all customer transaction histories
+- Access sanctions lists
+- Flag suspicious activity across all accounts
+- Update compliance records
+
+But broad access = broad attack surface. A compromised AML agent could:
+- Extract customer PII
+- Disable alerts
+- Bypass sanctions checks
+- Cover its tracks in logs
+
+### The Solution
+
+**Behavioral Risk Scoring with Auto-Revocation**
+
+```
+Agent Identity: agt_61aa09 (AML Screener v4.2)
+  ├─ Permitted Actions: read:all_transactions, write:flags, read:sanctions
+  ├─ Baseline Behavior (30-day rolling):
+  │  ├─ Avg queries/hour: 450
+  │  ├─ Avg records accessed/day: 12,000
+  │  └─ Avg flag rate: 0.8%
+  └─ Risk Threshold: 0.85 (auto-revoke immediately)
+```
+
+When the agent exhibits anomalies:
+
+| Anomaly | Risk Delta | Detection Time |
+|---------|-----------|-----------------|
+| +5000% query spike | +0.22 | 2min |
+| Accessing disabled accounts | +0.15 | 30sec |
+| Bulk data export attempt | +0.35 | ≤5sec |
+| Repeated failed auth checks | +0.28 | 15sec |
+| **Combined score crossing 0.85** | **Auto-revoke** | **≤60ms** |
+
+### Real Incident (Week 3)
+
+**Timeline:**
+- 14:32 — Agent behavior shifts (query patterns abnormal)
+- 14:33 — Risk score reaches 0.82 (warning threshold)
+- 14:34 — Agent attempts to access disabled test accounts
+- 14:34:12 — Risk score reaches 0.87
+- 14:34:15 — Kakunin auto-revokes certificate
+- 14:34:16 — All subsequent API calls rejected
+- 14:34:17 — Webhook fires to compliance team + Slack alert
+
+**Investigation revealed:** Malicious prompt injection attempt. Agent took ~80 unauthorized actions before revocation. Zero sensitive data exfiltrated (revocation happened before extraction query completed).
+
+### Regulatory Outcome
+
+**GDPR + MiCA Compliance**
+
+- God-mode access approved by regulator (with Kakunin behavioral guardrails)
+- Audit log shows real-time detection + sub-second containment
+- No data breach → no notification obligation
+- Post-incident: Risk parameters tightened, agent re-certified
+
+### Business Impact
+
+| Metric | Before (Manual) | After (Autonomous) | Compliance Benefit |
+|--------|---|---|---|
+| AML checks/day | 500K | 5M | 10x volume |
+| False positive rate | 2.1% | 1.8% | Higher accuracy |
+| Verification time | 4h (manual) | 15min (automated) | Faster clean |
+| Cost per check | €0.08 | €0.003 | 96% reduction |
+| Security incidents | N/A | 1 detected + contained | Proactive detection |
+
+---
+
+## For Your Risk Management
+
+Deploy god-mode agents safely:
+- Behavioral baseline (what "normal" looks like for your agent)
+- Real-time drift detection (anomalies trigger within seconds)
+- Automatic kill-switch (revocation ≤100ms, no human intervention needed)
+- Full audit trail (regulator can see exactly when + why revocation fired)
+
+Get started: [Monitor agent behavior →](/docs/enforcement)

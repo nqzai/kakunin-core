@@ -1,0 +1,117 @@
+---
+title: Certificate Verification
+description: Real-time certificate status checks via public verify endpoint — Kakunin's OCSP equivalent. Sub-500ms p99, no auth required.
+---
+
+## Overview
+
+Any system in the world can verify whether a Kakunin certificate is currently valid by calling one public endpoint — no API key required.
+
+```bash
+GET https://api.kakunin.ai/v1/verify/:serial
+```
+
+This is Kakunin's equivalent of OCSP (Online Certificate Status Protocol) — the same mechanism browsers use to check whether a website's TLS certificate has been revoked.
+
+## Response
+
+```json
+{
+  "data": {
+    "serial_number": "abc123def456",
+    "status": "active",
+    "valid": true,
+    "issued_at": "2026-01-15T09:00:00Z",
+    "expires_at": "2027-01-15T09:00:00Z",
+    "agent": {
+      "id": "uuid",
+      "name": "trading-bot-prod",
+      "model": "gpt-4o",
+      "version": "2026-01-15"
+    }
+  }
+}
+```
+
+<Callout type="info">
+Revoked or expired certificates always return `200` with `valid: false` — never `404`. The distinction between "certificate does not exist" and "certificate was revoked" matters for audit trails.
+</Callout>
+
+## Valid vs. Invalid
+
+| `valid` | `status` | Meaning |
+|---|---|---|
+| `true` | `active` | Certificate is valid — agent is authorized |
+| `false` | `revoked` | Certificate was explicitly revoked |
+| `false` | `expired` | Certificate validity period has passed |
+| — | — | `404` — serial number not found in this tenant |
+
+## Caching
+
+Responses are CDN-cached to reduce latency at scale:
+
+| Status | Cache TTL |
+|---|---|
+| `active` | 5 minutes |
+| `revoked` / `expired` | 60 seconds |
+
+When a certificate is revoked, Kakunin emits a `certificate.revoked` webhook event so that SDK consumers can invalidate their local cache immediately — without waiting for TTL expiry.
+
+## How to Use It
+
+### Direct API call
+
+```bash
+curl https://api.kakunin.ai/v1/verify/abc123def456
+```
+
+No `Authorization` header required.
+
+### With `@kakunin/middleware`
+
+`@kakunin/middleware` wraps the verify endpoint with in-process caching (default 5s TTL, cache hits under 1ms) and one-line enforcement for Express, Fastify, and Next.js:
+
+```bash
+npm install @kakunin/middleware
+```
+
+```ts
+import { kakuninGateway } from '@kakunin/middleware/express';
+
+app.use(kakuninGateway({
+  requiredScope: 'transactions:write', // optional scope check
+  cacheMs: 5000,                       // in-process cache TTL
+}));
+
+// req.kakunin now attached — agent identity, scope, expiry
+app.post('/trade', (req, res) => {
+  res.json({ agent: req.kakunin?.agent?.name });
+});
+```
+
+See [Enforcement Headers](/docs/enforcement) for Fastify and Next.js examples.
+
+## How Agents Present Their Certificate
+
+Agents include their Kakunin cert serial in every outgoing request using a standard header:
+
+```
+X-Kakunin-Cert-Serial: <serial_number>
+```
+
+The receiving system's gateway reads this header and calls the verify endpoint to enforce authorization. The tenant is resolved from the certificate record — no additional header needed.
+
+## Kong Gateway AI Agent mTLS Verification
+
+For enterprise deployments, you can enforce security directly at the API gateway border. By configuring **Kong Gateway AI Agent mTLS Verification**, the gateway handles the cryptographic handshake and certificate verification before any requests reach your downstream microservices.
+
+### Kong configuration steps:
+1. Configure a Kong client-certificate verification plugin to enforce mutual TLS (mTLS) using the Kakunin CA certificate as the trusted root.
+2. Extract the agent's certificate serial number from the client certificate.
+3. Pass the serial number downstream in the `X-Kakunin-Cert-Serial` header or perform real-time verification against the Kakunin verify API.
+
+This pattern offloads certificate verification latency and ensures that non-compliant agents are rejected at the edge.
+
+## Rate Limiting
+
+The verify endpoint is rate-limited by IP: **100 requests per 60 seconds**. For high-throughput enforcement, use the SDK's local cache to avoid per-request network calls.

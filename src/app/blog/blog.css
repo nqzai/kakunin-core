@@ -1,0 +1,290 @@
+/**
+ * Blog Post Styles
+ * Scoped under .blog-post-title and .blog-prose to avoid conflicts with landing.css
+ */
+
+/* ── Title (h1) ─────────────────────────────────────────────────────────────── */
+.blog-post-title {
+  font-family: var(--ff-display);
+  font-size: clamp(26px, 4vw, 44px);
+  font-weight: 900;
+  color: var(--ink);
+  margin: 0 0 16px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+/* ── Prose wrapper ───────────────────────────────────────────────────────────── */
+.blog-prose {
+  font-size: 17px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  max-width: 720px;
+}
+
+.blog-prose h1 {
+  font-family: var(--ff-display);
+  font-size: clamp(26px, 4vw, 44px);
+  font-weight: 900;
+  color: var(--ink);
+  margin: 0 0 16px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.blog-prose h2 {
+  font-family: var(--ff-display);
+  font-size: clamp(20px, 2.5vw, 28px);
+  font-weight: 800;
+  color: var(--ink);
+  margin: 48px 0 14px;
+  line-height: 1.25;
+  scroll-margin-top: 80px;
+}
+
+.blog-prose h3 {
+  font-family: var(--ff-display);
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 36px 0 10px;
+  line-height: 1.3;
+  scroll-margin-top: 80px;
+}
+
+.blog-prose p {
+  margin: 0 0 22px;
+}
+
+.blog-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.blog-prose blockquote {
+  border-left: 3px solid var(--green);
+  padding: 6px 20px;
+  margin: 32px 0;
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.blog-prose blockquote p {
+  margin: 0;
+}
+
+/* Code blocks */
+.blog-prose pre {
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-md);
+  padding: 20px 24px;
+  overflow-x: auto;
+  margin: 28px 0;
+  white-space: pre;
+}
+
+/* Inline code */
+.blog-prose code {
+  font-family: var(--ff-mono);
+  font-size: 0.875em;
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-edge);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.blog-prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* Lists */
+.blog-prose ul {
+  list-style: disc;
+  margin: 4px 0 22px;
+  padding-left: 28px;
+}
+
+.blog-prose ol {
+  list-style: decimal;
+  margin: 4px 0 22px;
+  padding-left: 28px;
+}
+
+.blog-prose li {
+  margin-bottom: 8px;
+  line-height: 1.7;
+}
+
+.blog-prose li:last-child {
+  margin-bottom: 0;
+}
+
+/* Links */
+.blog-prose a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.blog-prose a:hover {
+  text-decoration: none;
+}
+
+/* Inline images in content */
+.blog-prose figure {
+  margin: 36px 0;
+}
+
+.blog-prose figcaption {
+  font-size: 13px;
+  color: var(--ink-3);
+  font-family: var(--ff-mono);
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* ── Collapsible TOC ─────────────────────────────────────────────────────────── */
+.blog-toc {
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-md);
+  margin-bottom: 40px;
+  max-width: 720px;
+}
+
+.blog-toc summary {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  padding: 14px 18px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.blog-toc summary::-webkit-details-marker {
+  display: none;
+}
+
+.blog-toc summary::before {
+  content: '▶';
+  font-size: 8px;
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--green);
+}
+
+.blog-toc[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.blog-toc-nav {
+  padding: 2px 18px 16px;
+}
+
+.blog-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--paper-edge);
+  padding-top: 12px;
+}
+
+.blog-toc-list li {
+  margin-bottom: 0;
+}
+
+.blog-toc-list a {
+  display: block;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.blog-toc-list a:hover {
+  color: var(--green);
+}
+
+.blog-toc-h3 {
+  padding-left: 16px;
+}
+
+/* ── FAQ section ───────────────────────────────────────────────────────────── */
+.blog-faq-section {
+  margin: 48px 0 40px;
+}
+
+.blog-faq-list {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: #fff;
+}
+
+.blog-faq-item {
+  border-bottom: 1px solid var(--paper-edge);
+}
+
+.blog-faq-item:last-child {
+  border-bottom: 0;
+}
+
+.blog-faq-item > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 18px 22px;
+  font-family: var(--ff-display);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.blog-faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.blog-faq-item > summary::after {
+  content: '+';
+  font-family: var(--ff-mono);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--green);
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.blog-faq-item[open] > summary::after {
+  content: '−';
+}
+
+.blog-faq-answer {
+  padding: 0 22px 18px;
+}
+
+.blog-faq-answer > *:last-child {
+  margin-bottom: 0;
+}

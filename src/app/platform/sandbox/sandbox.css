@@ -1,0 +1,335 @@
+/* ============================================================
+   SANDBOX DEMO — dark terminal UI
+   ============================================================ */
+
+.sb-shell {
+  background: #0E1214;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: var(--ff-mono);
+  color: #C8C5BC;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ---- Top bar -------------------------------------------- */
+.sb-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #161B1E;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sb-topbar-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+}
+.sb-dot-red   { background: #D8514B; }
+.sb-dot-amber { background: #D29329; }
+.sb-dot-green { background: #2B934F; }
+.sb-topbar-title {
+  font-size: 11px;
+  color: rgba(200,197,188,0.45);
+  margin-left: 8px;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Body grid ------------------------------------------ */
+.sb-body {
+  display: grid;
+  grid-template-columns: 220px 1fr 300px;
+  min-height: 340px;
+}
+
+/* ---- Panels --------------------------------------------- */
+.sb-panel {
+  padding: 20px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  position: relative;
+}
+.sb-panel:last-child { border-right: none; }
+
+.sb-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: rgba(200,197,188,0.35);
+  margin-bottom: 14px;
+}
+
+/* ---- Cert panel ----------------------------------------- */
+.sb-status-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+.sb-status--active  { background: rgba(43,147,79,0.15);  color: #3EB069; border: 1px solid rgba(43,147,79,0.3); }
+.sb-status--warning { background: rgba(210,147,41,0.15); color: #D29329; border: 1px solid rgba(210,147,41,0.3); }
+.sb-status--revoked { background: rgba(216,81,75,0.15);  color: #D8514B; border: 1px solid rgba(216,81,75,0.3); }
+
+.sb-cert-field {
+  display: flex;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.sb-cert-key {
+  color: rgba(200,197,188,0.35);
+  min-width: 60px;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.sb-cert-val {
+  color: #C8C5BC;
+  word-break: break-all;
+}
+
+.sb-revoked-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(216,81,75,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.sb-revoked-overlay span {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: rgba(216,81,75,0.25);
+  transform: rotate(-20deg);
+  border: 3px solid rgba(216,81,75,0.2);
+  padding: 4px 16px;
+  border-radius: 4px;
+}
+
+/* ---- Gauge panel ---------------------------------------- */
+.sb-panel--gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sb-gauge-wrap {
+  position: relative;
+  width: 200px;
+  margin: 0 auto 8px;
+}
+.sb-gauge-svg {
+  width: 100%;
+  display: block;
+}
+.sb-gauge-num {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 42px;
+  font-weight: 700;
+  font-family: var(--ff-body);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  transition: color 0.4s ease;
+}
+.sb-gauge-pct {
+  font-size: 20px;
+  font-weight: 400;
+  margin-left: 2px;
+}
+.sb-gauge-band {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: rgba(200,197,188,0.4);
+  text-align: center;
+  margin-top: 6px;
+}
+
+.sb-thresholds {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 9px;
+  color: rgba(200,197,188,0.3);
+  letter-spacing: 0.04em;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+
+.sb-alert {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  width: 100%;
+}
+.sb-alert--warning {
+  background: rgba(210,147,41,0.12);
+  border: 1px solid rgba(210,147,41,0.25);
+  color: #D29329;
+}
+.sb-alert--revoked {
+  background: rgba(216,81,75,0.12);
+  border: 1px solid rgba(216,81,75,0.25);
+  color: #D8514B;
+}
+
+/* ---- Log panel ------------------------------------------ */
+.sb-panel--log {
+  display: flex;
+  flex-direction: column;
+  border-right: none;
+}
+.sb-log-stream {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.sb-log-entry {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  animation: sb-slide-in 0.2s ease;
+}
+@keyframes sb-slide-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sb-log--system  { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.06); }
+.sb-log--medium  { background: rgba(210,147,41,0.05);  border-color: rgba(210,147,41,0.12); }
+.sb-log--high    { background: rgba(216,81,75,0.06);   border-color: rgba(216,81,75,0.12); }
+.sb-log--critical{ background: rgba(216,81,75,0.10);   border-color: rgba(216,81,75,0.2); }
+.sb-log--revoke  { background: rgba(216,81,75,0.16);   border-color: rgba(216,81,75,0.35); }
+
+.sb-log-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.sb-log-ts {
+  font-size: 9px;
+  color: rgba(200,197,188,0.3);
+}
+.sb-log-sev {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.sb-sev--system   { color: rgba(200,197,188,0.45); background: rgba(255,255,255,0.06); }
+.sb-sev--medium   { color: #D29329; background: rgba(210,147,41,0.15); }
+.sb-sev--high     { color: #D8514B; background: rgba(216,81,75,0.15); }
+.sb-sev--critical { color: #D8514B; background: rgba(216,81,75,0.2); }
+.sb-sev--revoke   { color: #FF6B6B; background: rgba(216,81,75,0.25); }
+
+.sb-log-score {
+  font-size: 9px;
+  color: rgba(200,197,188,0.25);
+  margin-left: auto;
+}
+.sb-log-label {
+  font-size: 11px;
+  color: #E8E5DC;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.sb-log--revoke .sb-log-label { color: #FF6B6B; }
+.sb-log-desc {
+  font-size: 10px;
+  color: rgba(200,197,188,0.5);
+  line-height: 1.45;
+}
+
+/* ---- Actions bar ---------------------------------------- */
+.sb-actions {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  background: #0A0E10;
+}
+.sb-actions-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: rgba(200,197,188,0.3);
+  margin-bottom: 10px;
+}
+.sb-action-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sb-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #C8C5BC;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.sb-action-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.18);
+}
+.sb-action--critical { border-color: rgba(216,81,75,0.3); color: #D8514B; }
+.sb-action--critical:hover:not(:disabled) { background: rgba(216,81,75,0.1); border-color: rgba(216,81,75,0.5); }
+.sb-action--high { border-color: rgba(210,147,41,0.25); color: #D29329; }
+.sb-action--high:hover:not(:disabled) { background: rgba(210,147,41,0.08); border-color: rgba(210,147,41,0.45); }
+.sb-action--medium { border-color: rgba(255,255,255,0.12); }
+.sb-action--medium:hover:not(:disabled) { background: rgba(255,255,255,0.06); }
+
+.sb-action-label { font-weight: 600; }
+.sb-action-delta {
+  font-size: 10px;
+  opacity: 0.55;
+  font-weight: 400;
+}
+.sb-action--disabled, .sb-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.sb-action--reset {
+  border-color: rgba(43,147,79,0.35);
+  color: #3EB069;
+  font-weight: 600;
+}
+.sb-action--reset:hover {
+  background: rgba(43,147,79,0.1) !important;
+  border-color: rgba(43,147,79,0.55) !important;
+}
+
+/* ---- Responsive ----------------------------------------- */
+@media (max-width: 900px) {
+  .sb-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .sb-panel {
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .sb-panel--log { max-height: 280px; }
+  .sb-revoked-overlay span { font-size: 20px; }
+}

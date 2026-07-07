@@ -1,0 +1,135 @@
+---
+title: Message Signing & Cross-Service Handoff
+description: KMS-signed agent-to-agent message passing with tamper-evident chain hashes. Prevent spoofed decisions in multi-agent pipelines.
+---
+
+# Message Signing & Cross-Service Handoff
+
+When one AI agent passes a decision to another — a risk engine approving a trade, a classifier forwarding a document — the receiving agent needs proof the message was not tampered with or spoofed. Kakunin's message signing uses each agent's KMS-backed RSA-2048 key to produce a cryptographic signature over any JSON payload.
+
+No key material ever leaves AWS KMS. Any party can verify the signature using only the agent's public certificate — no Kakunin account required.
+
+## How It Works
+
+1. **Sender agent** calls `POST /v1/agents/{agentId}/sign` with a JSON payload.
+2. Kakunin computes a SHA-256 digest of the payload and sends it to KMS for signing (`RSASSA_PKCS1_V1_5_SHA_256`).
+3. KMS returns a base64 signature. Kakunin returns that signature plus the `certificate_serial` of the signing agent.
+4. **Receiver agent** calls `POST /v1/verify/message` with the original payload, the signature, and the certificate serial.
+5. Kakunin verifies the cryptographic signature against the public key in the certificate PEM — and also checks that the certificate is `active` and not expired or revoked.
+6. `{ valid: true }` means both the signature and the certificate check out.
+
+## Sign a Message
+
+```http
+POST /v1/agents/{agentId}/sign
+Authorization: Bearer <api-key>
+Content-Type: application/json
+
+{
+  "payload": {
+    "trade_id": "T-984231",
+    "amount_usd": 50000,
+    "action": "execute"
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "signature": "base64-encoded-signature==",
+    "algorithm": "RSASSA_PKCS1_V1_5_SHA_256",
+    "certificate_serial": "3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4",
+    "payload_hash": "e3b0c44298fc1c149afb...",
+    "signed_at": "2026-05-26T10:00:00.000Z"
+  }
+}
+```
+
+The sender passes the `signature` and `certificate_serial` to the receiver — typically as JSON fields in the message body or as HTTP headers.
+
+## Verify a Message
+
+Verification is a **public endpoint** — no API key needed. Any counterparty can verify.
+
+```http
+POST /v1/verify/message
+Content-Type: application/json
+
+{
+  "payload": {
+    "trade_id": "T-984231",
+    "amount_usd": 50000,
+    "action": "execute"
+  },
+  "signature": "base64-encoded-signature==",
+  "certificate_serial": "3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4"
+}
+```
+
+**Response — valid:**
+
+```json
+{
+  "data": {
+    "valid": true,
+    "certificate_status": "active",
+    "agent_id": "agt_01abc...",
+    "agent_name": "Risk Approval Agent",
+    "model_hash": "sha256:abc123...",
+    "certificate_serial": "3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4",
+    "expires_at": "2027-05-26T00:00:00.000Z"
+  }
+}
+```
+
+**Response — spoofed or revoked:**
+
+```json
+{
+  "data": {
+    "valid": false,
+    "certificate_status": "revoked",
+    ...
+  }
+}
+```
+
+A `valid: false` response triggers a `risk.alert` webhook to the certificate owner's tenant and writes an audit log event (`agent.message.verification.failed`).
+
+## Outbound Identity Header
+
+When your agent sends HTTP requests to downstream services, include the certificate serial so receivers can verify identity without calling Kakunin:
+
+```http
+POST /internal/execute-trade HTTP/1.1
+Host: execution-engine.internal
+X-Kakunin-Cert-Serial: 3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4
+Content-Type: application/json
+
+{"trade_id": "T-984231"}
+```
+
+The downstream service calls `GET /v1/verify/{serial}` to confirm the caller's identity, scope, and revocation status — no account required, response in under 500ms.
+
+## Security Properties
+
+| Property | Guarantee |
+|---|---|
+| Tamper detection | SHA-256 over deterministic JSON serialization — any field change invalidates the signature |
+| Spoofing prevention | Private key never leaves AWS KMS HSM — cannot be copied or extracted |
+| Revocation enforcement | A valid cryptographic signature from a revoked cert still returns `valid: false` |
+| Audit trail | Every sign and failed verify writes to `audit_log` — immutable, WORM-backed |
+| No credential sharing | Receiver needs only the public certificate serial, not an API key |
+
+## Kill Switch Integration
+
+If a signing agent is halted via `POST /v1/agents/{agentId}/halt`, its certificate is revoked immediately. All subsequent `POST /v1/verify/message` calls for that agent return `valid: false` — downstream services stop accepting its messages within the revocation propagation window (&lt;60s).
+
+## Requirements
+
+- Agent must have status `active`
+- Agent must have an active, non-expired certificate (issue one via [Certificate Issuance](/docs/certificates))
+- Payload must be a flat or nested JSON object (arrays at the top level are not supported)

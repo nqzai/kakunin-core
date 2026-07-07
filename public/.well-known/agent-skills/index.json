@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agentskills.io/schema/v0.2.0/index.json",
+  "skills": [
+    {
+      "name": "certificate-verification",
+      "type": "api",
+      "description": "Verify X.509 certificates issued to AI agents. Public endpoint, no auth required.",
+      "url": "https://kakunin.ai/api/v1/verify",
+      "sha256": "dcb6d99f918b28be52b4633e460ac524bd62e6512f72b9dcc5c95264211166d0"
+    },
+    {
+      "name": "ca-certificate",
+      "type": "api",
+      "description": "Download Kakunin CA certificate PEM for trust chain validation.",
+      "url": "https://kakunin.ai/api/v1/ca",
+      "sha256": "b610f632a256c4ebd4d50ac2e045781f36725f5c1b0cb828a366298439e63439"
+    },
+    {
+      "name": "certificate-revocation-list",
+      "type": "api",
+      "description": "Download Certificate Revocation List (CRL) for Kakunin-issued agent certificates.",
+      "url": "https://kakunin.ai/api/v1/crl",
+      "sha256": "e52942033ad8437ec2027e1b4701f6a43bc30682b13fece1db2ce1e91edbc5a7"
+    }
+  ]
+}

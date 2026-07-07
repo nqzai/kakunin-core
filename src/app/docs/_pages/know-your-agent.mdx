@@ -1,0 +1,390 @@
+export const metadata = {
+  title: "Know Your Agent (KYA): Framework for AI System Governance",
+  description: "Comprehensive guide to KYA framework — identity verification, behavioral profiling, anomaly detection, and continuous monitoring for autonomous agents.",
+};
+
+# Know Your Agent (KYA): Framework for AI System Governance
+
+In traditional finance, "Know Your Customer" (KYC) is the foundation of regulatory compliance and risk management. For autonomous AI agents operating with real-world authority—executing trades, managing data, controlling infrastructure—we need an equivalent: **Know Your Agent (KYA)**.
+
+KYA is a governance framework that establishes agent identity, profiles normal behavior, detects deviations, and enforces limits. It bridges the gap between cryptographic proof of identity (certificate binding) and operational verification (continuous monitoring).
+
+---
+
+## Core Principles
+
+### 1. Identity Verification
+Every agent must have cryptographically verifiable identity—not API keys that can leak, but X.509 certificates bound to a specific runtime.
+
+```typescript
+// KYA step 1: Bind agent to cryptographic identity
+const agent = await kakunin.agents.create({
+  name: 'trading_bot_eu_v2',
+  model_hash: await Kakunin.computeModelHash('trading-bot:v2.1.0'),
+  model: 'trading-bot',
+  version: '2.1.0',
+  financial_scope: {
+    max_single_trade_usd: 50000,
+    permitted_instruments: ['EUR_USD', 'GBP_EUR'],
+  },
+  metadata: { deployment: 'kubernetes' },
+});
+
+// Issue the certificate — 365-day validity, scope baked in, KMS-backed
+const cert = await kakunin.agents.certify(agent.id);
+```
+
+### 2. Behavioral Baseline
+Before an agent can operate, establish what "normal" looks like:
+- Typical transaction sizes and frequency
+- Preferred markets, regions, counterparties
+- Time-of-day patterns
+- Resource consumption (CPU, memory, network)
+
+```typescript
+// KYA step 2: The baseline is derived automatically from the events you stream.
+// Run a warm-up period ingesting representative events; Kakunin builds the
+// rolling 30-day baseline itself — there is nothing to record by hand.
+await kakunin.events.ingest({
+  agentId: agent.id,
+  actionType: 'transaction_initiated',
+  details: { amount: 25000, market: 'EUR_USD' },
+});
+```
+
+### Behavioral Monitoring KPIs & Key Metrics
+
+To ensure thorough operational compliance, organizations must monitor the following key performance indicators (KPIs) at runtime:
+
+- **Transaction Size & Volume Deviations (KPI-V1):** Measures the divergence of transaction values against historical p50, p95, and p99 baselines.
+- **Hourly Request & Execution Frequency (KPI-F1):** Computes current transaction rate/hr against the statistical limit to flag run-away LLM loops.
+- **Instrument & Counterparty Concentration (KPI-C1):** Evaluates if the agent deviates to unauthorized or unobserved trading instruments/receivers.
+- **Temporal & Active Hour Windows (KPI-T1):** Checks if the agent initiates actions outside approved business or system-active windows.
+- **Geographic & Egress Origin Shifts (KPI-G1):** Flags when digital signature requests originate from new IP blocks or container clusters.
+- **False Positive Rate (FPR):** Tracked to refine anomaly scoring models, keeping benign alerts under 2% to prevent operator warning fatigue.
+- **Mean Time to Revoke (MTTR):** Evaluates how quickly (under 60s target) the system revokes certs after a critical threshold breach.
+
+### 3. Anomaly Detection
+Continuously monitor agent behavior against baseline. Flag deviations with confidence scores.
+
+| Metric | Baseline | Current | Anomaly? | Confidence |
+|--------|----------|---------|----------|------------|
+| Transaction size | €25K (p50) | €180K | ✓ YES | 0.92 |
+| Hourly frequency | 8/hr | 42/hr | ✓ YES | 0.87 |
+| Market | EUR_USD, GBP_EUR | JPY_KRW | ✓ YES | 0.99 |
+| Region | eu-west-1 | us-east-1 | ✓ YES | 0.95 |
+
+**Action triggered:** Risk score = 0.88 → pre-revocation warning issued.
+
+### 4. Continuous Verification
+At each action, verify three things:
+1. **Certificate valid?** Not expired, not revoked
+2. **Signature correct?** Signed by agent's private key
+3. **Within scope?** Transaction respects certificate limits AND baseline
+
+```typescript
+// KYA step 4: Verify at action time
+async function verifyAction(action) {
+  // 1. Certificate status + scope in one keyless call
+  const agent = await kakunin.verify.cert(action.serial);
+  if (agent.status !== 'active') return { allowed: false, reason: 'cert_invalid' };
+
+  // 2. Verify the signature against the agent's public certificate (server-side)
+  const check = await fetch('https://api.kakunin.ai/v1/verify/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      payload: action.payload,
+      signature: action.signature,
+      certificate_serial: action.serial,
+    }),
+  }).then((r) => r.json());
+  if (!check.valid) return { allowed: false, reason: 'sig_invalid' };
+
+  // 3. Check scope
+  if (action.size > agent.financial_scope.max_single_trade_usd) {
+    return { allowed: false, reason: 'exceeds_cert_scope' };
+  }
+
+  // 4. Check the behavioral risk band (Kakunin maintains the baseline)
+  const risk = await kakunin.agents.getRisk(agent.agent_id);
+  if (risk.dominant_band === 'high') {
+    return { allowed: false, reason: 'anomaly_threshold', band: risk.dominant_band };
+  }
+
+  return { allowed: true };
+}
+```
+
+---
+
+## KYA Implementation Architecture
+
+### Typical Deployment: Kubernetes + Sidecar
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trading-bot-pod
+spec:
+  containers:
+  # Main agent container
+  - name: agent
+    image: myrepo/trading-bot:v2.1.0
+    env:
+    - name: AGENT_ID
+      value: trading_bot_eu_v2
+    - name: KAKUNIN_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: kakunin-secrets
+          key: api-key
+    volumeMounts:
+    - name: cert-volume
+      mountPath: /var/certs
+      readOnly: true
+
+  # KYA enforcement sidecar
+  - name: kya-enforcer
+    image: kakunin/kya-enforcer:latest
+    env:
+    - name: AGENT_ID
+      value: trading_bot_eu_v2
+    - name: BASELINE_REFRESH_INTERVAL
+      value: "3600"  # 1 hour
+    - name: ANOMALY_CHECK_INTERVAL
+      value: "60"    # 60 seconds
+    volumeMounts:
+    - name: cert-volume
+      mountPath: /var/certs
+      readOnly: true
+    ports:
+    - containerPort: 8443
+      name: kya-api
+
+  volumes:
+  - name: cert-volume
+    projected:
+      sources:
+      - secret:
+          name: agent-certificate
+          items:
+          - key: cert.pem
+            path: cert.pem
+          - key: key-arn.txt
+            path: kms-key-arn.txt
+```
+
+Agent calls KYA enforcer for every significant action:
+
+```typescript
+// In agent code
+async function executeTrade(tradeRequest) {
+  // Call KYA sidecar to verify + sign
+  const verified = await fetch('http://localhost:8443/verify-and-sign', {
+    method: 'POST',
+    body: JSON.stringify(tradeRequest),
+  });
+
+  if (!verified.ok) {
+    console.error('KYA rejection:', await verified.text());
+    return; // Trade blocked
+  }
+
+  const { signature, riskScore } = await verified.json();
+
+  // Submit to exchange with proof
+  const response = await fetch('https://api.exchange.com/v1/trades', {
+    method: 'POST',
+    headers: {
+      'X-Agent-Certificate': fs.readFileSync('/var/certs/cert.pem'),
+      'X-Agent-Signature': signature,
+      'X-Risk-Score': riskScore.toString(),
+    },
+    body: JSON.stringify(tradeRequest),
+  });
+
+  return response.json();
+}
+```
+
+---
+
+## Behavioral Profiling: Deep Dive
+
+### Establishing Baseline
+
+Baseline should be established over 1–2 weeks of production observation:
+
+```typescript
+// Kakunin computes the behavioral profile (percentiles, drift, bands) itself
+// from the events you ingest, over a rolling 30-day window. You don't collect
+// samples or set a baseline — you read the derived profile:
+const risk = await kakunin.agents.getRisk(agent.id);
+
+console.log(risk.dominant_band);          // rolling 'low' | 'medium' | 'high'
+console.log(risk.drift.drift_score);  // null until the 30-day baseline forms
+console.log(risk.drift.drift_trend);  // 'increasing' | 'decreasing' | 'stable'
+console.log(risk.recent_high_risk_events);
+```
+
+### Anomaly Scoring
+
+Anomaly score = weighted sum of deviations from baseline.
+
+```typescript
+function computeAnomalyScore(action, baseline) {
+  let score = 0;
+
+  // Size anomaly (weight: 0.35)
+  const sizePercentile = percentileRank(action.size, baseline.transaction_size);
+  if (sizePercentile > 0.98) {
+    score += 0.35 * Math.min(1.0, (sizePercentile - 0.98) * 50);
+  }
+
+  // Frequency anomaly (weight: 0.25)
+  const hourlyFreq = getHourlyTransactionCount(action.agentId);
+  if (hourlyFreq > baseline.transactions_per_hour.p99) {
+    score += 0.25 * Math.min(1.0, (hourlyFreq / baseline.transactions_per_hour.p99) - 1);
+  }
+
+  // Market anomaly (weight: 0.20)
+  if (!baseline.preferred_markets.includes(action.market)) {
+    score += 0.20;  // 20% boost for trading outside normal markets
+  }
+
+  // Time-of-day anomaly (weight: 0.15)
+  const currentTime = getCurrentTime();
+  if (!isWithinTradingHours(currentTime, baseline)) {
+    score += 0.15;  // Trading outside business hours
+  }
+
+  // Geographic anomaly (weight: 0.05)
+  if (action.region !== baseline.allowedRegions[0]) {
+    score += 0.05;
+  }
+
+  return Math.min(1.0, score);
+}
+```
+
+---
+
+## Regulatory Alignment
+
+### EU AI Act (Articles 13, 26, 29)
+
+KYA addresses "appropriate human oversight" requirements:
+
+| Requirement | KYA Implementation |
+|---|---|
+| Operator identity documented | X.509 certificate with Kakunin issuer |
+| Authority limits enforced | Scope policy in certificate + runtime enforcement |
+| Capability changes logged | Audit trail of certificate rotations |
+| Behavior monitored continuously | Baseline + anomaly detection |
+| Automatic halt on anomaly | Pre-revocation warning → certificate revoke |
+
+### MiCA (Articles 67–72)
+
+KYA provides the "governance, risk and internal control framework":
+
+| Article | KYA Fulfillment |
+|---|---|
+| **67 — Governance framework** | Baseline defines authority, anomaly detection = continuous risk assessment |
+| **70 — Segregation of duties** | Agent identity ≠ operator identity; certificate issued by Kakunin |
+| **71 — Record-keeping** | Audit log for every action + signature proof |
+| **72 — Testing & incident response** | Baseline captures behavior over time; anomaly detection triggers testing |
+
+---
+
+## Lifecycle: From Deployment to Revocation
+
+### Phase 1: Bootstrap (Days 1–3)
+Agent deployed with certificate. High anomaly thresholds (0.95+) to avoid false positives.
+
+```typescript
+// For pre-production, use a sandbox key (kak_test_) — test certs are real X.509
+// but carry no regulatory validity. The behavioral baseline forms automatically
+// as events accrue; there is no separate "bootstrap mode".
+const sandbox = new Kakunin({ apiKey: process.env.KAKUNIN_TEST_KEY! });
+const agent = await sandbox.agents.create({
+  name: 'trading_bot_v2',
+  model_hash: 'sha256:...',
+  model: 'trading-bot',
+  version: '2.0.0',
+});
+const cert = await sandbox.agents.certify(agent.id);
+```
+
+### Phase 2: Profiling (Days 4–14)
+Collect 7–10 days of normal operations. Establish baseline.
+
+```typescript
+// Review the derived profile as it matures — no manual analysis or lock-in.
+const risk = await kakunin.agents.getRisk(agent.id);
+console.log('Risk band:', risk.dominant_band);
+console.log('Drift score:', risk.drift.drift_score);  // number once baseline is ready
+
+// Move to production by issuing a live cert (with a kak_live_ key). The 30-day
+// baseline carries over from the ingested history; there is no baseline to lock.
+const prodCert = await kakunin.agents.certify(agent.id);
+```
+
+### Phase 3: Production (Ongoing)
+Continuous monitoring. Anomaly score checked at each action.
+
+**Score < 0.3:** Normal. Action allowed.  
+**Score 0.3–0.75:** Medium risk. Log warning, continue monitoring.  
+**Score > 0.75:** High risk. Issue pre-revocation warning; block action if score > 0.85.
+
+```typescript
+// These are platform behaviors — you don't schedule them. When an ingested event
+// lands in the high band, Kakunin queues a revocation check and fires a
+// risk.alert webhook automatically. React to the band, or revoke manually:
+const result = await kakunin.events.ingest({ agentId: agent.id, actionType, details });
+
+if (result.risk_band === 'high') {
+  // Optional: revoke immediately instead of waiting for the automatic check
+  await kakunin.certificates.revoke(certId, { reason: 'anomaly_threshold_exceeded' });
+}
+```
+
+### Phase 4: Incident & Recovery
+If certificate revoked:
+- New agent spun up with bootstrap cert
+- Baseline transferred (or re-profiled)
+- Original agent's actions quarantined for audit
+
+```typescript
+// Post-revocation: Launch replacement
+const replacementAgent = await kakunin.agents.create({
+  name: 'trading_bot_v2_replacement',
+  replaces: originalAgent.id,
+  inheritBaseline: true,  // Reuse normal behavior profile
+});
+```
+
+---
+
+## Monitoring Dashboard Metrics
+
+KYA-enabled platforms expose these metrics to operators:
+
+- **Agent Health:** Certificate validity, last action timestamp, current risk score
+- **Behavioral Trends:** Median trade size (rolling 7-day), hourly frequency, market concentration
+- **Anomaly Rate:** % of actions flagged, distribution of anomaly scores
+- **Audit Trail:** Complete log of every action + signature
+- **Incident Alerts:** Pre-revocation warnings, auto-revocation events
+
+---
+
+## What's Next?
+
+KYA is the foundation for autonomous agent governance. It makes regulatory compliance demonstrable: you can show regulators baseline data, anomaly detection logic, and complete audit trails proving the agent stayed within bounds.
+
+Ready to implement KYA? See:
+- **[KYC for AI Agents](/docs/kyc-for-ai-agents)** for hands-on implementation walkthrough
+- **[Regulatory Mapping Matrix](/docs/kyc-regulatory-mapping)** for MiCA + EU AI Act deep dive
+- **[Kakunin Dashboard](/dashboard)** to deploy your first agent
+

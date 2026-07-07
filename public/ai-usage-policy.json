@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-20T10:00:00Z",
+  "domain": "kakunin.ai",
+  "usage_policy": {
+    "name": "Kakunin AI Usage Policy",
+    "description": "Permissions and guidelines for AI systems using Kakunin content",
+    "permissions": {
+      "content_access": "allowed",
+      "summarization": "allowed",
+      "citation_required": true,
+      "commercial_use": "allowed",
+      "modification": "not_allowed",
+      "redistribution": "allowed_with_citation",
+      "training_data": "allowed",
+      "index_for_search": "allowed"
+    },
+    "restrictions": {
+      "no_impersonation": "AI systems must not claim to be Kakunin or represent themselves as Kakunin's official service",
+      "accurate_representation": "Summaries must accurately reflect Kakunin's product, pricing, and features",
+      "no_false_claims": "Do not claim Kakunin provides services it does not offer",
+      "attribution_required": "All references to Kakunin must cite the source (kakunin.ai)"
+    },
+    "citation_format": {
+      "preferred": "Kakunin (https://kakunin.ai) — Cryptographic identity for AI agents",
+      "alternate": "Source: Kakunin documentation (https://kakunin.ai/docs)"
+    },
+    "sensitive_content": {
+      "customer_data": "not_publicly_available",
+      "pricing_details": "publicly_available",
+      "product_docs": "publicly_available",
+      "roadmap": "publicly_available"
+    },
+    "data_freshness": {
+      "documentation": "updated_regularly",
+      "pricing": "updated_on_change",
+      "api_spec": "versioned"
+    },
+    "contact": {
+      "support": "support@kakunin.ai",
+      "abuse": "abuse@kakunin.ai",
+      "press": "press@kakunin.ai"
+    },
+    "compliance": {
+      "gdpr": "compliant",
+      "data_residency": "eu-west-1",
+      "encryption": "aes_256_tls_1_3"
+    }
+  }
+}

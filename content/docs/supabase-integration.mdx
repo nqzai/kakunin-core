@@ -1,0 +1,244 @@
+---
+title: Supabase Integration
+description: "Bind Kakunin X.509 certificate metadata to Supabase RLS policies — row-level data isolation enforced by cryptographic agent identity."
+---
+
+Kakunin and Supabase complement each other at the database layer. Kakunin verifies *who* an AI agent is and *what scope* it holds. Supabase RLS enforces *what data* that agent can touch. Together, they make agent-level data isolation cryptographically grounded rather than application-layer convention.
+
+<Callout type="info">
+**Two ways to bind.** The quickest path is the SDK adapter [`@kakunin/sdk/verify/supabase`](/docs/sdks#supabase-rls-binding--kakuninsdkverifysupabase) — `bindAgentSession()` verifies the cert and returns a Supabase client scoped via a short-lived JWT (`auth.jwt()`-based policies). This page documents the **manual transaction-scoped `set_config` method**, which suits direct Postgres connections and gives you full control over the RLS helper functions.
+</Callout>
+
+---
+
+## How it works
+
+Every Kakunin-certified agent carries an X.509 certificate with:
+- `agent_id` — unique agent identifier
+- `status` — `active`, `suspended`, or `retired`
+- `financial_scope` — permitted instruments, venues, limits
+
+When your API route receives a request from an agent, it verifies the certificate and writes those values into Postgres transaction-scoped settings. RLS policies on your tables read those settings — meaning every query is automatically scoped to what the agent is authorised to access, with no application-level filtering required.
+
+```
+Agent request → Kakunin cert verification → set_config(agent_id, cert_status)
+                                                  ↓
+                                         Supabase query
+                                                  ↓
+                                    RLS: WHERE agent_id = current_setting(...)
+```
+
+---
+
+## Setup
+
+### 1. Install the SDK
+
+```bash
+npm install @kakunin/sdk @supabase/supabase-js
+```
+
+### 2. Create the RLS helper function
+
+Run this migration once in your Supabase project:
+
+```sql
+-- Migration: add Kakunin RLS helper functions
+-- Reason: expose transaction-scoped cert metadata to RLS policies
+
+-- Read the verified agent ID from transaction context
+CREATE OR REPLACE FUNCTION kakunin_agent_id() RETURNS text
+  LANGUAGE sql STABLE
+  AS $$ SELECT current_setting('kakunin.agent_id', true) $$;
+
+-- Read the verified cert status from transaction context
+CREATE OR REPLACE FUNCTION kakunin_cert_status() RETURNS text
+  LANGUAGE sql STABLE
+  AS $$ SELECT current_setting('kakunin.cert_status', true) $$;
+
+-- Read permitted instruments (comma-separated) from transaction context
+CREATE OR REPLACE FUNCTION kakunin_permitted_instruments() RETURNS text[]
+  LANGUAGE sql STABLE
+  AS $$ SELECT string_to_array(
+    current_setting('kakunin.permitted_instruments', true), ','
+  ) $$;
+```
+
+### 3. Apply RLS policies to your tables
+
+```sql
+-- Example: behavior_events table — agents can only see their own events
+ALTER TABLE behavior_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "agents_read_own_events"
+  ON behavior_events FOR SELECT
+  USING (
+    agent_id = kakunin_agent_id()
+    AND kakunin_cert_status() = 'active'
+  );
+
+CREATE POLICY "agents_insert_own_events"
+  ON behavior_events FOR INSERT
+  WITH CHECK (
+    agent_id = kakunin_agent_id()
+    AND kakunin_cert_status() = 'active'
+  );
+
+-- Example: trades table — enforce permitted instruments from cert scope
+ALTER TABLE trades ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "agents_trade_within_scope"
+  ON trades FOR INSERT
+  WITH CHECK (
+    agent_id = kakunin_agent_id()
+    AND kakunin_cert_status() = 'active'
+    AND instrument = ANY(kakunin_permitted_instruments())
+  );
+```
+
+### 4. Set cert context in your API routes
+
+```ts
+import { createClient } from '@supabase/supabase-js';
+import Kakunin from '@kakunin/sdk';
+
+const kkn = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+export async function POST(req: Request) {
+  const certSerial = req.headers.get('x-kakunin-cert-serial');
+  if (!certSerial) {
+    return Response.json({ error: 'Missing cert serial' }, { status: 401 });
+  }
+
+  // Verify certificate — public endpoint, no API key needed
+  const agent = await kkn.verify.cert(certSerial);
+  if (agent.status !== 'active') {
+    return Response.json({ error: 'Certificate not active' }, { status: 403 });
+  }
+
+  // Create a per-request Supabase client scoped to service role
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  // Bind cert metadata to this transaction — RLS policies read these
+  await supabase.rpc('set_config', {
+    setting: 'kakunin.agent_id',
+    value: agent.id,
+    is_local: true,   // transaction-scoped — cleared after query
+  });
+  await supabase.rpc('set_config', {
+    setting: 'kakunin.cert_status',
+    value: agent.status,
+    is_local: true,
+  });
+  if (agent.permitted_instruments?.length) {
+    await supabase.rpc('set_config', {
+      setting: 'kakunin.permitted_instruments',
+      value: agent.permitted_instruments.join(','),
+      is_local: true,
+    });
+  }
+
+  // All subsequent queries on this client are RLS-scoped to the agent
+  const { data, error } = await supabase
+    .from('behavior_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ data });
+}
+```
+
+<Callout type="info">
+`is_local: true` on `set_config` scopes the setting to the current transaction. The value is automatically cleared when the transaction ends — no manual cleanup required and no risk of context leaking across requests.
+</Callout>
+
+---
+
+## Full stack example
+
+```
+AI Agent
+  ↓ HTTP request + X-Kakunin-Cert-Serial: c4f9-17a2
+Your API route
+  ↓ kkn.verify.cert("c4f9-17a2") → { id: "agt-123", status: "active", ... }
+    → set_config("kakunin.agent_id", "agt-123", is_local: true)
+    → set_config("kakunin.cert_status", "active", is_local: true)
+Supabase query: SELECT * FROM trades WHERE ...
+  ↓ RLS: agent_id = kakunin_agent_id() AND kakunin_cert_status() = 'active'
+  ↓ Only rows owned by agt-123 returned
+Response to agent
+```
+
+If the agent's certificate has been revoked since the last request, `kkn.verify.cert()` returns `status: "revoked"`, `set_config` sets `kakunin.cert_status = 'revoked'`, and every RLS policy gated on `kakunin_cert_status() = 'active'` returns zero rows — no code changes required.
+
+---
+
+## Multi-agent tables
+
+For tables accessed by multiple agents simultaneously (e.g. a shared audit log), use the cert context as an attribute filter rather than a row ownership check:
+
+```sql
+-- Agents can insert into audit_log but only for their own agent_id
+CREATE POLICY "agents_insert_audit"
+  ON audit_log FOR INSERT
+  WITH CHECK (
+    actor_id = kakunin_agent_id()
+    AND kakunin_cert_status() = 'active'
+  );
+
+-- Compliance officers (service role) can read everything — no RLS restriction
+-- Service role bypasses RLS by default in Supabase
+```
+
+---
+
+## Revocation propagation
+
+When Kakunin auto-revokes a certificate (risk score ≥ 0.85), the event fires a `certificate.revoked` webhook. Attach a webhook handler to purge any cached session tokens and force re-verification on the next request:
+
+```ts
+// POST /api/webhooks/kakunin
+import { kkn } from '@/lib/kakunin';
+
+export async function POST(req: Request) {
+  const rawBody = await req.text();
+  const sig = req.headers.get('x-kakunin-signature') ?? '';
+
+  const event = await kkn.webhooks.constructEvent(rawBody, sig, process.env.KAKUNIN_WEBHOOK_SECRET!);
+
+  if (event.event === 'certificate.revoked') {
+    const { serial_number, agent_id } = event.data as { serial_number: string; agent_id: string };
+    // Purge any server-side cert cache keyed by serial_number or agent_id
+    await purgeCertCache(serial_number);
+  }
+
+  return new Response('OK');
+}
+```
+
+See the [webhooks guide](/docs/webhooks) for full webhook configuration.
+
+---
+
+## Environment variables
+
+```bash
+# Required — already in your Supabase project
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=   # service role bypasses RLS — use only in server routes
+
+# Required — Kakunin
+KAKUNIN_API_KEY=kak_live_...
+KAKUNIN_WEBHOOK_SECRET=          # from Kakunin dashboard → Webhooks
+```
+
+---
+
+## Marketplace listing
+
+The Kakunin integration is available in the [Supabase Marketplace](https://supabase.com/partners/integrations). Installing from the marketplace adds the Kakunin RLS helper migration to your project and configures the webhook endpoint automatically.
