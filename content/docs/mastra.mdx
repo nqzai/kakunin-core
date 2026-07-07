@@ -1,0 +1,225 @@
+---
+title: Mastra Integration
+description: "@kakunin/mastra — typed Kakunin compliance tools for Mastra agents and workflows. Certificate verification, scope checking, risk scoring, and EU AI Act audit events."
+---
+
+`@kakunin/mastra` provides a `KakuninIntegration` class with four typed tools for use in [Mastra](https://mastra.ai) agents and workflows.
+
+> **Source:** [`nqzai/kakunin-integrations`](https://github.com/nqzai/kakunin-integrations) (npm workspace) — Apache-2.0, published to npm with provenance.
+
+<Callout type="info">
+Kakunin's MCP server (`POST https://www.kakunin.ai/api/mcp`) already works with Mastra's built-in MCP client. Use `@kakunin/mastra` when you want typed tool definitions, auto-completion, and first-class integration without MCP overhead.
+</Callout>
+
+---
+
+## Installation
+
+```bash
+npm install @kakunin/mastra @mastra/core zod
+```
+
+---
+
+## Quickstart
+
+```ts
+import { Agent } from '@mastra/core/agent';
+import { openai } from '@ai-sdk/openai';
+import { KakuninIntegration } from '@kakunin/mastra';
+
+const kakunin = new KakuninIntegration({
+  apiKey: process.env.KAK_API_KEY!,
+});
+
+const complianceAgent = new Agent({
+  name: 'ComplianceAgent',
+  instructions: 'You verify AI agent compliance before approving operations.',
+  model: openai('gpt-4o'),
+  tools: kakunin.getTools(),
+});
+
+const result = await complianceAgent.generate(
+  'Check if agent agt-123 is authorised to execute a financial trade.'
+);
+console.log(result.text);
+```
+
+---
+
+## `new KakuninIntegration(config)`
+
+```ts
+import { KakuninIntegration } from '@kakunin/mastra';
+
+const kakunin = new KakuninIntegration({
+  apiKey: 'kak_live_...',   // required — kak_live_... or kak_test_...
+  baseUrl: 'https://www.kakunin.ai/api/v1',  // optional — override API base
+});
+```
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `apiKey` | `string` | ✓ | Kakunin API key |
+| `baseUrl` | `string` | — | Override API base URL. Defaults to production. |
+
+---
+
+## `kakunin.getTools()`
+
+Returns an object of Mastra-compatible tool definitions. Pass directly to an Agent's `tools` option or spread into workflow step tools.
+
+```ts
+const tools = kakunin.getTools();
+// → { verifyAgentCertificate, checkAgentScope, getBehaviorRiskScore, emitBehaviorEvent }
+```
+
+---
+
+## Tools
+
+### `verifyAgentCertificate`
+
+Verifies the X.509 certificate of an AI agent. Calls the public verify endpoint — no API key required internally, results cached globally (p99 < 500ms).
+
+**Input:** `{ agentId: string }`
+
+**Returns:** Certificate status, scopes, expiry, serial number, revocation history.
+
+---
+
+### `checkAgentScope`
+
+Returns `allowed: true/false` for a given action string plus the agent's full permitted scope list.
+
+**Input:** `{ agentId: string, action: string }`
+
+**Returns:** `{ agentId, action, allowed, permittedScopes, agentStatus }`
+
+```ts
+// Example: check before a financial trade
+// action: "trade.execute", "data.write", "api_call", etc.
+```
+
+---
+
+### `getBehaviorRiskScore`
+
+Returns the current rolling behavioral risk score and band. Use before high-stakes operations — critical band (≥ 0.85) triggers auto-revocation within 60s.
+
+**Input:** `{ agentId: string }`
+
+**Returns:** `{ agentId, score: number, band: "low" | "medium" | "high" | "critical" }`
+
+| Band | Score | Notes |
+|---|---|---|
+| `low` | < 0.3 | Normal |
+| `medium` | ≥ 0.3 | Elevated |
+| `high` | ≥ 0.75 | Pre-revocation warning issued |
+| `critical` | ≥ 0.85 | Auto-revocation in < 60s |
+
+---
+
+### `emitBehaviorEvent`
+
+Writes a behavioral event to Kakunin's immutable audit trail (EU AI Act Article 12).
+
+**Input:** `{ agentId: string, actionType: ActionType, details?: Record<string, unknown> }`
+
+**Returns:** `{ eventId, agentId, actionType }`
+
+Valid `actionType` values:
+
+`api_call` · `authentication_attempt` · `authentication_failure` · `data_access` · `data_mutation` · `transaction_initiated` · `transaction_anomaly` · `unauthorized_access_attempt` · `message_signed` · `message_verification_failed`
+
+---
+
+## Using in a Mastra Workflow
+
+```ts
+import { createWorkflow, createStep } from '@mastra/core/workflows';
+import { KakuninIntegration } from '@kakunin/mastra';
+import { z } from 'zod';
+
+const kakunin = new KakuninIntegration({ apiKey: process.env.KAK_API_KEY! });
+const tools = kakunin.getTools();
+
+const checkCompliance = createStep({
+  id: 'check-compliance',
+  inputSchema: z.object({ agentId: z.string(), action: z.string() }),
+  outputSchema: z.object({ approved: z.boolean(), reason: z.string() }),
+  execute: async ({ inputData }) => {
+    const { agentId, action } = inputData;
+
+    // 1. Verify certificate
+    const cert = await tools.verifyAgentCertificate.execute({
+      context: { agentId },
+    });
+    if (cert.certificate_status !== 'active') {
+      return { approved: false, reason: `Certificate ${cert.certificate_status}` };
+    }
+
+    // 2. Check scope
+    const scope = await tools.checkAgentScope.execute({
+      context: { agentId, action },
+    });
+    if (!scope.allowed) {
+      return { approved: false, reason: `Missing scope: ${action}` };
+    }
+
+    // 3. Check risk
+    const risk = await tools.getBehaviorRiskScore.execute({
+      context: { agentId },
+    });
+    if (risk.score >= 0.75) {
+      return { approved: false, reason: `Risk score too high: ${risk.score} (${risk.band})` };
+    }
+
+    // 4. Emit audit event
+    await tools.emitBehaviorEvent.execute({
+      context: { agentId, actionType: 'api_call', details: { action, approved: true } },
+    });
+
+    return { approved: true, reason: 'All compliance checks passed' };
+  },
+});
+
+export const complianceWorkflow = createWorkflow({
+  name: 'compliance-check',
+  triggerSchema: z.object({ agentId: z.string(), action: z.string() }),
+})
+  .then(checkCompliance)
+  .commit();
+```
+
+---
+
+## Using Kakunin's MCP server with Mastra
+
+For the complete Kakunin tool surface, connect via MCP directly:
+
+```ts
+import { Agent } from '@mastra/core/agent';
+import { MCPClient } from '@mastra/mcp';
+
+const mcp = new MCPClient({
+  servers: {
+    kakunin: {
+      url: new URL('https://www.kakunin.ai/api/mcp'),
+      requestInit: {
+        headers: { Authorization: `Bearer ${process.env.KAK_API_KEY}` },
+      },
+    },
+  },
+});
+
+const tools = await mcp.getTools();
+
+const agent = new Agent({
+  name: 'KakuninAgent',
+  tools,
+  model: openai('gpt-4o'),
+});
+```
+
+See [MCP Server docs](/docs/mcp) for the full tool list and transport options.

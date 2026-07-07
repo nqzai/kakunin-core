@@ -1,0 +1,212 @@
+---
+title: Vercel Integration
+description: "One-click Kakunin setup for Next.js projects on Vercel. Installs KAK_API_KEY into your deployment environment automatically."
+---
+
+The Kakunin integration for Vercel eliminates manual environment variable setup. Install once from the Vercel Marketplace and `KAK_API_KEY` is injected into every environment (production, preview, development) across your selected projects.
+
+---
+
+## Install from Vercel Marketplace
+
+1. Open the [Kakunin integration on Vercel Marketplace](https://vercel.com/integrations/kakunin)
+2. Click **Add Integration**
+3. Select the Vercel scope (personal account or team)
+4. You'll be redirected to kakunin.ai to authenticate
+5. Authorise — Kakunin creates a dedicated API key and injects it into your Vercel projects
+6. You're returned to Vercel with `KAK_API_KEY` ready in all environments
+
+No dashboard configuration, no copy-pasting keys.
+
+---
+
+## What gets injected
+
+| Variable | Value | Environments |
+|---|---|---|
+| `KAK_API_KEY` | `kak_live_...` (encrypted) | production, preview, development |
+
+The key is created specifically for the Vercel integration with the name `"Vercel Integration"` in your Kakunin dashboard. You can view or revoke it at any time under **Dashboard → API Keys**.
+
+---
+
+## Using the key in your Next.js app
+
+After installation, `process.env.KAK_API_KEY` is available in all server-side code. No `next.config.js` changes needed — Vercel injects it as a server-side env var automatically.
+
+```ts
+// lib/kakunin.ts
+import Kakunin from '@kakunin/sdk';
+
+export const kkn = new Kakunin({
+  apiKey: process.env.KAK_API_KEY!,
+});
+```
+
+```ts
+// app/api/v1/agents/route.ts
+import { kkn } from '@/lib/kakunin';
+
+export async function POST(req: Request) {
+  const body = await req.json();
+
+  const agent = await kkn.agents.create({
+    name: body.name,
+    model: body.model,
+    version: body.version,
+    model_hash: body.model_hash,
+  });
+
+  const cert = await kkn.agents.certify(agent.id);
+  return Response.json({ agent, cert });
+}
+```
+
+---
+
+## Quickstart after install
+
+```bash
+# Verify the env var is available in your local dev environment
+vercel env pull .env.local
+grep KAK_API_KEY .env.local   # → KAK_API_KEY=kak_live_...
+```
+
+```ts
+import Kakunin from '@kakunin/sdk';
+
+const kkn = new Kakunin({ apiKey: process.env.KAK_API_KEY! });
+
+// Register your first agent
+const agent = await kkn.agents.create({
+  name: 'My Next.js AI Agent',
+  model: 'gpt-4o',
+  version: 'v1.0.0',
+  model_hash: await Kakunin.computeModelHash('gpt-4o-2024-08'),
+});
+
+const cert = await kkn.agents.certify(agent.id);
+console.log(cert.serial_number); // c4f9-17a2-6b8e
+```
+
+---
+
+## Middleware: enforce agent certs on inbound requests
+
+After installing the integration, protect your API routes from uncertified agents using the Kakunin middleware helper:
+
+```ts
+// middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
+import Kakunin from '@kakunin/sdk';
+
+const kkn = new Kakunin({ apiKey: process.env.KAK_API_KEY! });
+
+export async function middleware(req: NextRequest) {
+  if (req.nextUrl.pathname.startsWith('/api/agent/')) {
+    const serial = req.headers.get('x-kakunin-cert-serial');
+    if (!serial) {
+      return NextResponse.json({ error: 'Agent certificate required' }, { status: 401 });
+    }
+
+    const agent = await kkn.verify.cert(serial);
+    if (agent.status !== 'active') {
+      return NextResponse.json({ error: 'Certificate not active' }, { status: 403 });
+    }
+
+    // Forward verified agent ID to route handlers
+    const headers = new Headers(req.headers);
+    headers.set('x-verified-agent-id', agent.id);
+    return NextResponse.next({ request: { headers } });
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/api/agent/:path*'],
+};
+```
+
+<Callout type="info">
+`kkn.verify.cert()` is a public endpoint — no authentication required on the caller side. Results are CDN-cached globally (p99 &lt; 500ms). Cache is invalidated automatically when a certificate is revoked.
+</Callout>
+
+---
+
+## Preview deployments
+
+Kakunin works natively with Vercel Preview deployments. Because `KAK_API_KEY` is injected into the `preview` environment, every PR preview gets a working Kakunin integration automatically. Use a `kak_test_...` key to route preview traffic to the Kakunin sandbox — test certificates are real X.509 certs with no regulatory validity.
+
+```bash
+# Override for preview environments only
+vercel env add KAK_API_KEY preview
+# Enter: kak_test_...
+```
+
+---
+
+## Reinstalling / rotating keys
+
+Each reinstallation issues a new `KAK_API_KEY` and revokes the previous one. If you need to rotate manually:
+
+1. Dashboard → API Keys → revoke `"Vercel Integration"` key
+2. Go to Vercel Marketplace → Kakunin integration → **Configure** → reinstall
+
+Or use the API:
+
+```bash
+# Create a new key
+curl -X POST https://api.kakunin.ai/v1/api-keys \
+  -H "Authorization: Bearer $KAK_API_KEY" \
+  -d '{"name":"Vercel Integration Rotated"}'
+
+# Update the env var in Vercel
+vercel env rm KAK_API_KEY production
+vercel env add KAK_API_KEY production
+# Enter the new key value
+```
+
+---
+
+## Troubleshooting
+
+**`KAK_API_KEY` not found after install**
+
+Pull the latest env vars: `vercel env pull .env.local`. If the key still isn't present, check your Vercel project settings under **Settings → Environment Variables** — it should appear as an encrypted variable.
+
+**`401 Invalid or revoked API key`**
+
+The key may have been revoked (e.g. by a reinstall). Check Dashboard → API Keys and confirm `"Vercel Integration"` shows as active. If not, reinstall the integration.
+
+**Preview deployments returning 401**
+
+Confirm `KAK_API_KEY` is set for the `preview` environment in Vercel project settings. By default the integration injects into all three environments, but Vercel project-level overrides can shadow it.
+
+---
+
+## Environment variables reference
+
+```bash
+# Injected automatically by the Vercel integration
+KAK_API_KEY=kak_live_...
+
+# Optional — for webhook verification
+KAKUNIN_WEBHOOK_SECRET=whsec_...   # from Kakunin dashboard → Webhooks
+```
+
+---
+
+## Manual setup (without the marketplace)
+
+If you prefer not to use the Vercel Marketplace:
+
+```bash
+# 1. Create an API key in the Kakunin dashboard → API Keys → New Key
+# 2. Add it to Vercel
+vercel env add KAK_API_KEY production
+vercel env add KAK_API_KEY preview
+vercel env add KAK_API_KEY development
+```
+
+See the [TypeScript SDK docs](/docs/sdks) for the full client API reference.

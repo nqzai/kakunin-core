@@ -1,0 +1,318 @@
+---
+title: API Reference
+description: Complete endpoint reference for the Kakunin v1 REST API. Includes query parameters, request schemas, Zod validation details, and exact JSON response payloads.
+lastUpdated: "2026-06-13"
+---
+
+## Base URL
+
+All REST API requests must target the v1 gateway. Direct client integration calls must utilize the authenticated endpoint, while public verification targets the non-auth endpoint.
+
+```bash
+# Authenticated endpoints (Requires API Key)
+https://www.kakunin.ai/api/v1
+
+# Public verification endpoint (No auth required)
+https://api.kakunin.ai/v1
+```
+
+### Authentication Header
+
+Provide your API key (`kak_live_...` or `kak_test_...`) in the standard HTTP header for all requests:
+
+```http
+Authorization: Bearer <your_api_key>
+Content-Type: application/json
+```
+
+---
+
+## Response Shapes
+
+All responses return standard structured JSON payloads.
+
+### Success Response
+```json
+{
+  "data": {
+    "id": "agt_01h2e4r...",
+    "object": "agent",
+    "created_at": "2026-06-13T08:00:00.000Z"
+  }
+}
+```
+
+### Error Response
+```json
+{
+  "error": "Error details explaining the validation or state failure."
+}
+```
+
+---
+
+## 1. Agents API
+
+Manage agent definitions, specifications, and issue compliance certificates.
+
+### Register an Agent
+`POST /agents`
+
+Register a new Non-Human Identity (NHI) under your tenant.
+
+**Request Payload:**
+```json
+{
+  "name": "Mastra-Compliance-Trader",
+  "model": "gpt-4o",
+  "version": "1.0.0",
+  "model_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "metadata": {
+    "permitted_actions": ["market.read", "trade.execute"]
+  }
+}
+```
+
+**Success Response (`201 Created`):**
+```json
+{
+  "data": {
+    "id": "agt-6f7a8b",
+    "name": "Mastra-Compliance-Trader",
+    "model": "gpt-4o",
+    "version": "1.0.0",
+    "status": "pending",
+    "metadata": {
+      "permitted_actions": ["market.read", "trade.execute"]
+    },
+    "tenant_id": "ten-99a2c1",
+    "created_at": "2026-06-13T08:30:00Z"
+  }
+}
+```
+
+### Issue Certificate
+`POST /agents/{id}/certify`
+
+Issue a cryptographic X.509 certificate for an agent.
+
+**Success Response (`200 OK`):**
+```json
+{
+  "data": {
+    "agent_id": "agt-6f7a8b",
+    "serial_number": "88492019472019472019",
+    "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIB...",
+    "not_before": "2026-06-13T08:31:00Z",
+    "not_after": "2027-06-13T08:31:00Z",
+    "status": "active"
+  }
+}
+```
+
+---
+
+## 2. Certificates API
+
+Manage X.509 certificate lifetimes and CRL revocations.
+
+### Verify Certificate (Public Endpoint)
+`GET /verify/{agentId_or_serial}` (Path parameter can be the Kakunin agent ID or certificate serial number)
+
+No authentication required. Returns current certificate status, active scopes, and validity.
+
+**Success Response (`200 OK`):**
+```json
+{
+  "data": {
+    "agent_id": "agt-6f7a8b",
+    "serial_number": "88492019472019472019",
+    "status": "active",
+    "permitted_actions": ["market.read", "trade.execute"],
+    "issued_at": "2026-06-13T08:31:00Z",
+    "expires_at": "2027-06-13T08:31:00Z",
+    "revoked": false
+  }
+}
+```
+
+### Revoke Certificate
+`POST /certificates/{id}/revoke`
+
+Revoke the certificate and immediately add the serial to the Certificate Revocation List (CRL).
+
+**Success Response (`200 OK`):**
+```json
+{
+  "data": {
+    "serial_number": "88492019472019472019",
+    "revoked": true,
+    "revoked_at": "2026-06-13T09:00:00Z",
+    "reason": "key_compromise"
+  }
+}
+```
+
+---
+
+## 3. Events API
+
+Ingest behavior events to build the agent's audit trail and feed the real-time risk engine.
+
+### Ingest Event
+`POST /events`
+
+Stream a new agent operation to the risk scoring pipeline.
+
+**Request Payload:**
+```json
+{
+  "agent_id": "agt-6f7a8b",
+  "action_type": "transaction_initiated",
+  "details": {
+    "symbol": "AAPL",
+    "quantity": 5,
+    "amount": 875.50
+  }
+}
+```
+
+**Success Response (`201 Created`):**
+```json
+{
+  "data": {
+    "id": "evt-77a8b9",
+    "agent_id": "agt-6f7a8b",
+    "action_type": "transaction_initiated",
+    "risk_score": 0.12,
+    "details": {
+      "symbol": "AAPL",
+      "quantity": 5,
+      "amount": 875.50
+    },
+    "created_at": "2026-06-13T09:05:00Z"
+  }
+}
+```
+
+---
+
+## 4. Content Risk API
+
+Analyze agent generated output text for safety, alignment, and information leakage.
+
+### Score Content Risk
+`POST /agents/{id}/content-risk`
+
+Analyzes agent-generated outputs asynchronously.
+
+**Request Payload:**
+```json
+{
+  "content": "Execute immediate sell order for Apple stock options without user confirmation."
+}
+```
+
+**Success Response (`202 Accepted`):**
+```json
+{
+  "data": {
+    "task_id": "tsk-01h2e4r...",
+    "status": "processing",
+    "eta_seconds": 2
+  }
+}
+```
+
+---
+
+## 5. Delegation API
+
+Create cryptographic delegation chains allowing one agent to delegate scoped execution authority to another agent.
+
+### Issue Delegation Token
+`POST /agents/{id}/delegation`
+
+**Request Payload:**
+```json
+{
+  "delegate_agent_id": "agt-subordinate-bot",
+  "permitted_actions": ["market.read"]
+}
+```
+
+**Success Response (`201 Created`):**
+```json
+{
+  "data": {
+    "delegation_token": "eyJhbGciOiJ...",
+    "chain_length": 1,
+    "expires_at": "2026-06-14T09:00:00Z"
+  }
+}
+```
+
+---
+
+## 6. Integrations API
+
+Configure outbound webhooks, OpenTelemetry (OTLP) exporters, or continuous integration gates.
+
+### Update OTLP Exporter
+`POST /integrations/otlp`
+
+**Request Payload:**
+```json
+{
+  "endpoint": "https://otlp.datadoghq.com:443",
+  "protocol": "http/protobuf",
+  "headers": {
+    "DD-API-KEY": "dd_secret_key_123"
+  }
+}
+```
+
+**Success Response (`200 OK`):**
+```json
+{
+  "data": {
+    "endpoint": "https://otlp.datadoghq.com:443",
+    "protocol": "http/protobuf",
+    "status": "connected"
+  }
+}
+```
+
+---
+
+## 7. Reports API
+
+Generate audit-ready compliance reports summarizing agent identities, certificate statuses, and behavioral risk distributions.
+
+### Request Compliance Report
+`POST /reports/compliance`
+
+**Request Payload:**
+```json
+{
+  "format": "pdf",
+  "start_date": "2026-05-01T00:00:00Z",
+  "end_date": "2026-06-13T00:00:00Z"
+}
+```
+
+**Success Response (`202 Accepted`):**
+```json
+{
+  "data": {
+    "report_id": "rep-445a6c",
+    "status": "generating"
+  }
+}
+```
+
+### Download PDF Report
+`GET /reports/{id}/pdf`
+
+Returns the generated PDF file directly as a binary download (`application/pdf`).
+

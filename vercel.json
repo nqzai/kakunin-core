@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/trial-expiry",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/internal/cron/sandbox-retention",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/tenant-notifications",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

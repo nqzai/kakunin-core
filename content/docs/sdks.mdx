@@ -1,0 +1,385 @@
+---
+title: TypeScript SDK
+description: "@kakunin/sdk — official TypeScript SDK for registering agents, issuing certificates, ingesting behavioral events, and verifying identities."
+---
+
+> **Source:** [`nqzai/kakunin-sdk-typescript`](https://github.com/nqzai/kakunin-sdk-typescript) — Apache-2.0, published to npm with provenance.
+
+## Installation
+
+```bash
+npm install @kakunin/sdk
+```
+
+Requires Node.js 18+. Works in browser environments that support the Web Crypto API.
+
+---
+
+## Quickstart
+
+Seven lines from zero to a certified, monitored agent:
+
+```ts
+import { Kakunin } from '@kakunin/sdk';
+
+const kkn = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+// 1. Register the agent
+const agent = await kkn.agents.create({
+  name: 'Invoicing Bot v3.2',
+  model_hash: await Kakunin.computeModelHash('gpt-4o-2024-08'),
+  model: 'gpt-4o',
+  version: 'v3.2.1',
+  permitted_actions: ['read:invoices', 'write:drafts'],
+});
+
+// 2. Issue an X.509 certificate — < 3s end-to-end
+const cert = await kkn.agents.certify(agent.id);
+console.log(cert.serial_number); // c4f9-17a2-6b8e
+console.log(cert.expires_at);    // 2027-05-20T...
+
+// 3. Stream each agent action
+const event = await kkn.events.ingest({
+  agentId: agent.id,
+  actionType: 'transaction_initiated',
+  details: { amount: 840, currency: 'EUR', venue: 'euronext' },
+});
+// → { risk_score: 0.12, risk_band: 'low', revocation_check_queued: false }
+```
+
+---
+
+## Configuration
+
+```ts
+const kkn = new Kakunin({
+  apiKey: 'kak_live_...',   // or kak_test_... for sandbox
+  baseUrl: 'https://api.kakunin.ai/v1',  // default
+  timeoutMs: 10_000,          // per-request timeout, default 10s
+  maxRetries: 3,              // retries on 5xx / network errors
+});
+```
+
+### Sandbox mode
+
+Use a `kak_test_...` key to hit the sandbox CA. Test certs are real X.509 certificates but have no regulatory validity. Up to 100 free test certs per day.
+
+```ts
+const sandbox = new Kakunin({ apiKey: 'kak_test_...' });
+console.log(sandbox.isSandbox()); // true
+```
+
+---
+
+## Agents
+
+### `kkn.agents.create(params)`
+
+Register a new AI agent. Returns with `status: "pending"` until certify is called.
+
+```ts
+const agent = await kkn.agents.create({
+  name: 'Trading Bot',
+  model_hash: 'sha256:8f3c...2a91',  // see computeModelHash below
+  model: 'gpt-4o',
+  version: 'v1.0.0',
+  financial_scope: {
+    max_single_trade_usd: 50_000,
+    daily_limit_usd: 500_000,
+    permitted_instruments: ['EUR/USD', 'BTC/EUR'],
+    permitted_venues: ['euronext', 'xetra'],
+    leverage_permitted: false,
+  },
+});
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | ✓ | Human-readable agent name |
+| `model_hash` | `string` | ✓ | SHA-256 of model weights/config. See `computeModelHash`. |
+| `model` | `string` | — | Model identifier e.g. `gpt-4o` |
+| `version` | `string` | — | Semver or build tag |
+| `financial_scope` | `FinancialScope` | — | Encoded in the X.509 cert |
+| `metadata` | `object` | — | Arbitrary key-value pairs |
+
+### `kkn.agents.certify(agentId)`
+
+Issues an X.509 certificate via AWS KMS. Private key never leaves the HSM.
+
+```ts
+const cert = await kkn.agents.certify(agent.id);
+// cert.certificate_pem — full X.509 PEM
+// cert.serial_number   — use for verification
+// cert.expires_at      — 365 days (MiCA Art. 70)
+```
+
+Returns `409` if agent already has an active certificate.
+Returns `422` if `model_hash` is not set on the agent.
+
+### `kkn.agents.get(agentId)`
+
+Fetch a single agent including certificate history.
+
+```ts
+const agent = await kkn.agents.get('agt_8f3c2a91d4');
+console.log(agent.certificates); // sorted newest-first
+```
+
+### `kkn.agents.list(params?)`
+
+```ts
+const { data, meta } = await kkn.agents.list({ status: 'active', limit: 50 });
+```
+
+### `kkn.agents.update(agentId, params)`
+
+```ts
+await kkn.agents.update(agent.id, { version: 'v3.3.0', model_hash: newHash });
+```
+
+### `kkn.agents.getRisk(agentId)`
+
+Rolling 30-day risk profile — drift score, event breakdown, trend, and recent high-risk events.
+
+```ts
+const risk = await kkn.agents.getRisk(agent.id);
+
+if (risk.dominant_band === 'high') {
+  console.warn('Agent at high risk. Recent events:', risk.recent_high_risk_events);
+}
+
+console.log(risk.drift.drift_score);   // null until 30d baseline established
+console.log(risk.drift.drift_trend);   // 'increasing' | 'decreasing' | 'stable'
+```
+
+---
+
+## Events
+
+### `kkn.events.ingest(params)`
+
+Stream a behavioral event. Returns risk score synchronously (p99 200ms).
+
+```ts
+const result = await kkn.events.ingest({
+  agentId: agent.id,
+  actionType: 'transaction_initiated',
+  details: { amount: 840, currency: 'EUR' },
+  sessionId: 'sess_abc123',   // optional grouping
+  occurredAt: new Date().toISOString(),  // defaults to server now()
+});
+
+console.log(result.risk_score);               // 0.12
+console.log(result.risk_band);                // 'low'
+console.log(result.revocation_check_queued);  // true if band === 'high'
+```
+
+**Action types:**
+
+| Type | Band (default) | Description |
+|---|---|---|
+| `api_call` | low | Standard API invocation |
+| `authentication_attempt` | low | Login / token request |
+| `authentication_failure` | medium | Failed auth |
+| `data_access` | low | Read operation on data |
+| `data_mutation` | medium | Write / delete operation |
+| `transaction_initiated` | medium | Financial transaction |
+| `transaction_anomaly` | high | Transaction outside normal pattern |
+| `unauthorized_access_attempt` | high | Scope violation attempt |
+| `message_signed` | low | Agent signed a message with KMS |
+| `message_verification_failed` | medium | Signature verification failed |
+
+<Callout type="warn">
+`unauthorized_access_attempt` is auto-elevated by the platform when a `transaction_initiated` event exceeds the financial scope encoded in the agent's certificate (amount > `max_single_trade_usd` or venue not in `permitted_venues`). You do not need to set this manually.
+</Callout>
+
+### `kkn.events.list(params?)`
+
+Cursor-based pagination, newest-first.
+
+```ts
+const page1 = await kkn.events.list({ agent_id: agent.id, band: 'high', limit: 20 });
+
+// Next page
+if (page1.pagination.has_next_page) {
+  const page2 = await kkn.events.list({ before: page1.pagination.next_cursor });
+}
+```
+
+---
+
+## Certificates
+
+### `kkn.certificates.revoke(certificateId, params)`
+
+Manually revoke a certificate. Also suspends the agent.
+Triggers CRL regeneration and fires a `certificate.revoked` webhook.
+
+```ts
+await kkn.certificates.revoke(cert.id, {
+  reason: 'Compromised model weights detected in supply chain audit',
+});
+```
+
+---
+
+## Verify (public — no auth required)
+
+### `kkn.verify.cert(serial)`
+
+Anyone — regulators, counterparties, auditors — can verify an agent's certificate without an API key. Globally CDN-cached, p99 < 500ms.
+
+```ts
+const agent = await kkn.verify.cert('c4f9-17a2-6b8e');
+
+if (agent.status !== 'active') throw new Error('Certificate not active');
+if (!agent.permitted_actions.includes('write:drafts')) throw new Error('Scope exceeded');
+
+console.log(agent.issuer);      // "Kakunin Certificate Authority"
+console.log(agent.model_hash);  // sha256:8f3c...2a91
+```
+
+---
+
+## Webhooks
+
+### `kkn.webhooks.constructEvent(rawBody, signature, secret)`
+
+Verify HMAC-SHA256 webhook signatures before processing. Pass the **raw** request body string — do not JSON-parse first.
+
+```ts
+// Next.js App Router
+export async function POST(req: Request) {
+  const rawBody = await req.text();
+  const signature = req.headers.get('x-kakunin-signature') ?? '';
+
+  let event;
+  try {
+    event = await kkn.webhooks.constructEvent(rawBody, signature, process.env.KAKUNIN_WEBHOOK_SECRET!);
+  } catch (err) {
+    return new Response('Invalid signature', { status: 400 });
+  }
+
+  if (event.event === 'certificate.revoked') {
+    const { serial_number } = event.data as { serial_number: string };
+    // Evict from local cache so next verify call sees the revocation
+    await purgeVerifyCache(serial_number);
+  }
+
+  return new Response('OK');
+}
+```
+
+**Webhook event types:** `certificate.issued` · `certificate.revoked` · `risk.alert` · `agent.created` · `agent.updated`
+
+---
+
+## `Kakunin.computeModelHash(input)`
+
+Compute a SHA-256 hash of model weights or a config string. This binds the agent's certificate to an exact model version — any model update requires a new cert.
+
+```ts
+// From a config string (deterministic for known models)
+const hash = await Kakunin.computeModelHash(JSON.stringify({
+  provider: 'openai',
+  model: 'gpt-4o',
+  version: '2024-08-06',
+}));
+// → sha256:3e4a...f12b
+
+// From model weights file (Node.js)
+import { readFileSync } from 'fs';
+const weights = readFileSync('./model.safetensors');
+const hash = await Kakunin.computeModelHash(weights);
+```
+
+---
+
+## Error handling
+
+All errors are instances of `KakuninError` with `.status` and `.code`:
+
+```ts
+import { Kakunin, KakuninError, KakuninAuthError, KakuninRateLimitError } from '@kakunin/sdk';
+
+try {
+  await kkn.agents.certify(agentId);
+} catch (err) {
+  if (err instanceof KakuninRateLimitError) {
+    console.warn(`Rate limited. Retry after ${err.retryAfter}s`);
+  } else if (err instanceof KakuninAuthError) {
+    console.error('Invalid API key');
+  } else if (err instanceof KakuninError) {
+    console.error(`API error ${err.status}: ${err.message} (${err.code})`);
+  }
+}
+```
+
+The client automatically retries `5xx` and network errors with exponential backoff (default: 3 retries). `429` rate-limit errors wait `Retry-After` before retrying.
+
+---
+
+## Acceptance-side middleware — `@kakunin/sdk/verify`
+
+For enforcing certificates on **inbound** requests to your API (not agent registration), use the `verify` subpath of the SDK:
+
+```bash
+npm install @kakunin/sdk
+```
+
+```ts
+import { kakuninMiddleware } from '@kakunin/sdk/verify';
+
+// Next.js middleware.ts
+const enforce = kakuninMiddleware({ onVerifyTimeout: 'fail-closed' });
+
+export async function middleware(req: NextRequest) {
+  const { agent, reject } = await enforce(req);
+  if (!agent) return reject('Missing or invalid agent certificate');
+  // agent.permitted_actions is now typed and verified
+}
+```
+
+See the [enforcement guide](/docs/enforcement) for full usage.
+
+---
+
+## Supabase RLS binding — `@kakunin/sdk/verify/supabase`
+
+Bind a verified agent certificate to a Supabase client so Postgres Row-Level Security constrains every query to the agent's identity and scopes. The SDK verifies the cert (fail-closed), then mints a short-lived Supabase JWT — its lifetime never exceeds the certificate's expiry.
+
+Requires the `@supabase/supabase-js` peer dependency. **Server-side only** — the Supabase JWT secret must never reach a browser or client bundle.
+
+```ts
+import { bindAgentSession } from '@kakunin/sdk/verify/supabase';
+
+const supabase = await bindAgentSession({
+  supabaseUrl: process.env.SUPABASE_URL!,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY!,
+  supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET!, // server-side secret
+  serial: req.headers.get('x-kakunin-cert-serial')!,
+});
+
+// Every query is RLS-scoped to the agent via auth.jwt() ->> 'sub'
+const { data } = await supabase.from('trades').select('*');
+```
+
+```sql
+-- Supabase RLS policy: agents can only read their own rows
+create policy "agents read own rows" on trades for all
+  using ( agent_id = (auth.jwt() ->> 'sub') );
+```
+
+`bindAgentSession` throws `KakuninVerifyError` for revoked, expired, or unverifiable certificates — no client is returned in that case. The agent's `permitted_actions` are carried in the JWT's `app_metadata.scopes` claim for scope-aware policies.
+
+---
+
+## Environment variables
+
+```bash
+# Required
+KAKUNIN_API_KEY=kak_live_...          # or kak_test_... for sandbox
+
+# Optional — for webhook verification
+KAKUNIN_WEBHOOK_SECRET=whsec_...  # from dashboard → Webhooks → signing secret
+```

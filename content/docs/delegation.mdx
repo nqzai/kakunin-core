@@ -1,0 +1,104 @@
+---
+title: Delegation Chains (RFC 8693)
+description: "Make the human→agent→sub-agent authority chain explicit with RFC 8693 token exchange. Prove who authorised whom, with what scope, for non-repudiation."
+---
+
+## Overview
+
+When an agent spawns a sub-agent, who actually authorised the action? Legacy non-human-identity tooling loses that chain. Kakunin makes it explicit with **RFC 8693 OAuth 2.0 Token Exchange** — the `act` claim carries the full authority chain from the human principal down to the acting sub-agent.
+
+The token is **stateless** (verifiable by signature, no DB lookup), and issuance is recorded in the audit log for non-repudiation — control **C-A3**, mapped to the NCCoE non-repudiation pillar.
+
+A chain reads root → current:
+
+```
+user@acme.com (human) → agent:abc (agent) → agent:abc/researcher (sub_agent)
+```
+
+## Issuing a delegation token
+
+```bash
+POST /v1/agents/{id}/delegation
+```
+
+```json
+{
+  "chain": [
+    { "sub": "user@acme.com", "type": "human" },
+    { "sub": "agent:abc", "type": "agent" },
+    { "sub": "agent:abc/researcher", "type": "sub_agent" }
+  ],
+  "scope": "read:research write:drafts",
+  "audience": "https://api.internal.acme.com",
+  "ttl_seconds": 3600
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `chain` | yes | Ordered root→current, 1–8 actors. `type` ∈ `human`, `agent`, `sub_agent`, `service` |
+| `scope` | no | Space-delimited scope string (≤ 500 chars) |
+| `audience` | no | Intended token audience (≤ 256 chars) |
+| `ttl_seconds` | no | 60–86,400 (1 min–24 h) |
+
+**Response `200`:**
+```json
+{
+  "data": {
+    "token": "eyJhbGciOi...",
+    "chain": [
+      { "sub": "user@acme.com", "type": "human" },
+      { "sub": "agent:abc", "type": "agent" },
+      { "sub": "agent:abc/researcher", "type": "sub_agent" }
+    ],
+    "principal": "agent:abc/researcher",
+    "scope": "read:research write:drafts",
+    "issued_at": "2026-05-30T10:00:00Z",
+    "expires_at": "2026-05-30T11:00:00Z"
+  }
+}
+```
+
+## Verifying a token
+
+Stateless — checks signature and expiry, returns the resolved chain. No authentication or DB lookup required, so any downstream service can verify.
+
+```bash
+POST /v1/delegation/verify
+```
+
+```json
+{ "token": "eyJhbGciOi..." }
+```
+
+**Response `200` (valid):**
+```json
+{
+  "data": {
+    "valid": true,
+    "principal": "agent:abc/researcher",
+    "chain": [
+      { "sub": "user@acme.com", "type": "human" },
+      { "sub": "agent:abc", "type": "agent" },
+      { "sub": "agent:abc/researcher", "type": "sub_agent" }
+    ],
+    "chain_display": "user@acme.com → agent:abc → agent:abc/researcher",
+    "scope": "read:research write:drafts",
+    "agent_id": "uuid",
+    "expires_at": "2026-05-30T11:00:00Z"
+  }
+}
+```
+
+**Response `200` (invalid):**
+```json
+{ "data": { "valid": false, "reason": "expired" } }
+```
+
+<Callout type="info">
+Verification returns `200` with `valid: false` rather than a 4xx — the chain is checked, the answer is simply "no". Branch on `data.valid`, not the HTTP status.
+</Callout>
+
+## Why it matters
+
+Every issuance writes a `delegation.issued` row to the audit log recording the principal, the full chain, and the scope. When an auditor asks "who told this sub-agent it could move money?", the answer is one query — and it's cryptographically attributable, not a guess. Delegation chains also surface inside compliance reports (NCCoE non-repudiation) and decision-chain traces.

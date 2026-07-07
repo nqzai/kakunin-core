@@ -1,0 +1,92 @@
+---
+title: did:kakunin W3C Specification (Decentralized Identifier Method)
+description: Detailed technical specification for the did:kakunin machine identity Decentralized Identifier (DID) method.
+---
+
+Traditional client credentials and API keys are static, prone to leakage, and carry no contextual data about the executing runtime. `did:kakunin` is an open trust standard designed to cryptographically bind an autonomous agent's identity, system prompts, model weights, and ownership credentials into a resolvable W3C Decentralized Identifier.
+
+---
+
+## Method Syntax
+
+The method scheme identifier is `kakunin`. The specific DID syntax conforms to the W3C DID Core 1.0 specification:
+
+```
+did:kakunin:<model-weight-hash>:<system-prompt-hash>:<owner-public-key>
+```
+
+### Path Parameters
+
+- **`model-weight-hash`**: SHA-256 hash of the executing model's weights (or container image layer hash) to prevent model spoofing.
+- **`system-prompt-hash`**: SHA-256 hash of the base system prompt instructions to guarantee that behavior constraints have not been altered or bypassed.
+- **`owner-public-key`**: Hex-encoded Ed25519 or SECP256K1 public key representing the legal entity owning the agent.
+
+### Example DID
+
+```
+did:kakunin:d2a71f8b4a2e5539e6a9f14371bf9e2c6504a33118991a0c776de1177651a2cf:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855:04b9a3f12b6f12e87900bfa3f8863f6831d102e3b2e987c2b535d886fa7f884a29
+```
+
+---
+
+## DID Document Schema
+
+Resolving a `did:kakunin` identifier returns a standard W3C JSON-LD DID Document structure:
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1"
+  ],
+  "id": "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...",
+  "verificationMethod": [
+    {
+      "id": "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...#session-key-1",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...",
+      "publicKeyMultibase": "z6MkmLqPkWz..."
+    }
+  ],
+  "authentication": [
+    "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...#session-key-1"
+  ],
+  "service": [
+    {
+      "id": "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...#ocsp-revocation",
+      "type": "KakuninOcspService",
+      "serviceEndpoint": "https://api.kakunin.ai/v1/verify"
+    },
+    {
+      "id": "did:kakunin:d2a71f8b...:e3b0c442...:04b9a3f1...#audit-trail",
+      "type": "KakuninWormLogService",
+      "serviceEndpoint": "https://audit.kakunin.ai/v1/logs"
+    }
+  ]
+}
+```
+
+---
+
+## DID Lifecycle & CRUD Operations
+
+### Create (Register)
+1. The developer generates an ephemeral key pair inside the execution sandbox.
+2. The agent client hashes the model weights and system prompt, signing the bundle with the owner's private key.
+3. The registration payload is sent to the Kakunin PKI registry, which issues an X.509 certificate containing the DID in the `Subject Alternative Name` (SAN) field.
+
+### Read (Resolve)
+Verifiers (such as API Gateways or database adapters) resolve the DID document by:
+1. Decoding the X.509 certificate supplied in the mutual TLS (mTLS) handshake.
+2. Direct querying of the resolver endpoint, which validates the certificate against the Kakunin CRL/OCSP responder.
+
+### Update (Rotate)
+When a model weight or system prompt is modified:
+1. The agent's existing DID is marked as inactive.
+2. A new DID containing the updated hashes is registered.
+3. A new session certificate must be issued to the agent.
+
+### Deactivate (Revoke)
+If the Kakunin Risk Engine detects anomalous prompt drift, rapid transactional loops, or potential hijack attempts:
+1. The certificate is immediately published on the Kakunin CRL (Certificate Revocation List).
+2. Future OCSP validation requests return a status of `revoked`, immediately blocking gateway/database access.

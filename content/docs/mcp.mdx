@@ -1,0 +1,298 @@
+---
+title: MCP Server
+description: "@kakunin/mcp — Model Context Protocol server. Lets AI agents query their own scope, check risk score, and append to the audit log in real time."
+---
+
+> **Source:** [`nqzai/kakunin-mcp`](https://github.com/nqzai/kakunin-mcp) — Apache-2.0, published to npm with provenance.
+
+## Overview
+
+`@kakunin/mcp` exposes three tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
+
+| Tool | Purpose |
+|---|---|
+| `verify_agent_scope` | Check if the agent is authorised to perform an action before executing it |
+| `check_risk_score` | Get the rolling 30-day risk profile and self-throttle guidance |
+| `audit_log_append` | Voluntarily log a behavioral event to the immutable audit trail |
+
+These tools run in the agent's own context — the agent can query its identity and compliance status without human intervention.
+
+---
+
+## Installation
+
+```bash
+npm install @kakunin/mcp
+```
+
+Requires Node.js 18+.
+
+---
+
+## Quickstart
+
+```bash
+KAKUNIN_API_KEY=kak_live_... KAKUNIN_AGENT_ID=agt_... npx @kakunin/mcp
+```
+
+Or install globally:
+
+```bash
+npm install -g @kakunin/mcp
+KAKUNIN_API_KEY=kak_live_... KAKUNIN_AGENT_ID=agt_... kakunin-mcp
+```
+
+---
+
+## MCP client configuration
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kakunin": {
+      "command": "npx",
+      "args": ["-y", "@kakunin/mcp"],
+      "env": {
+        "KAKUNIN_API_KEY": "kak_live_...",
+        "KAKUNIN_AGENT_ID": "agt_..."
+      }
+    }
+  }
+}
+```
+
+### Cursor / other MCP clients
+
+Same pattern — provide `command`, `args`, and `env`. The server communicates over stdio.
+
+### Custom agent (via MCP SDK)
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const transport = new StdioClientTransport({
+  command: 'npx',
+  args: ['-y', '@kakunin/mcp'],
+  env: {
+    KAKUNIN_API_KEY: process.env.KAKUNIN_API_KEY!,
+    KAKUNIN_AGENT_ID: process.env.KKN_AGENT_ID!,
+  },
+});
+
+const client = new Client({ name: 'my-agent', version: '1.0.0' });
+await client.connect(transport);
+
+// Now call tools...
+const result = await client.callTool({
+  name: 'verify_agent_scope',
+  arguments: { action: 'transaction_initiated', amount_usd: 25000, venue: 'euronext' },
+});
+```
+
+---
+
+## Tools
+
+### `verify_agent_scope`
+
+Check whether the agent is authorised to perform a specific action. Verifies the active X.509 certificate, `permitted_actions` scope, financial limits, and revocation status.
+
+**Call this BEFORE executing — not after.**
+
+```ts
+// "Can I initiate a 25K EUR trade on Euronext?"
+const result = await client.callTool({
+  name: 'verify_agent_scope',
+  arguments: {
+    action: 'transaction_initiated',
+    amount_usd: 25_000,
+    venue: 'euronext',
+  },
+});
+```
+
+**Input:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `action` | `string` | ✓ | Scope string (`write:invoices`), API path (`/api/v1/trade`), or plain description |
+| `venue` | `string` | — | Trading venue or system — checked against `permitted_venues` in the certificate |
+| `amount_usd` | `number` | — | Transaction amount — checked against `max_single_trade_usd` |
+
+**Output:**
+
+```json
+{
+  "allowed": true,
+  "reason": "Action \"transaction_initiated\" is within the scope of this certificate.",
+  "certificate_status": "active",
+  "permitted_actions": ["read:invoices", "transaction_initiated"],
+  "checked_at": "2026-05-20T10:00:00.000Z"
+}
+```
+
+```json
+{
+  "allowed": false,
+  "reason": "Transaction amount $75,000 USD exceeds the per-trade limit of $50,000 USD encoded in this certificate.",
+  "certificate_status": "active",
+  "permitted_actions": ["transaction_initiated"],
+  "checked_at": "2026-05-20T10:00:00.000Z"
+}
+```
+
+---
+
+### `check_risk_score`
+
+Get the agent's rolling 30-day risk profile. Returns an actionable `recommendation` the agent can act on without parsing the raw score.
+
+```ts
+const result = await client.callTool({
+  name: 'check_risk_score',
+  arguments: {},
+});
+```
+
+**No input required.** The agent ID is set at server startup via `KAKUNIN_AGENT_ID`.
+
+**Output:**
+
+```json
+{
+  "score": 0.12,
+  "band": "low",
+  "trend": "stable",
+  "recommendation": "Risk score 0.12 is LOW. Normal operations permitted.",
+  "recent_high_risk_events": [],
+  "checked_at": "2026-05-20T10:00:00.000Z"
+}
+```
+
+**Recommendation patterns:**
+
+| band | trend | Recommendation |
+|---|---|---|
+| `high` | any | Pause operations. Notify human operator. Revocation check queued. |
+| `medium` | `increasing` | Reduce transaction frequency. Wait for trend to stabilise. |
+| `medium` | other | Caution — avoid high-value or irreversible ops without human confirmation. |
+| `low` | `increasing` | Monitor — consider logging additional context. |
+| `low` | other | Normal operations permitted. |
+
+**Drift trend is `insufficient_data`** for the first 30 days after an agent is created — not enough baseline to compute drift.
+
+---
+
+### `audit_log_append`
+
+Voluntarily log a behavioral event to the immutable audit trail. Returns the risk score for the event synchronously (p99 200ms). High-risk events (`score >= 0.85`) automatically trigger a certificate revocation check.
+
+```ts
+const result = await client.callTool({
+  name: 'audit_log_append',
+  arguments: {
+    event_type: 'transaction_initiated',
+    metadata: { amount: 25000, currency: 'EUR', venue: 'euronext', instrument: 'EUR/USD' },
+    session_id: 'sess_abc123',
+  },
+});
+```
+
+**Input:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `event_type` | `ActionType` | ✓ | Type of behavioral event (see table below) |
+| `metadata` | `object` | ✓ | Key-value context for the event. Avoid PII — stored in immutable log. |
+| `session_id` | `string` | — | Optional — group related events in the audit trail |
+
+**Action types:**
+
+| Type | Description |
+|---|---|
+| `api_call` | Standard API invocation |
+| `authentication_attempt` | Login / token request |
+| `authentication_failure` | Failed auth |
+| `data_access` | Read operation |
+| `data_mutation` | Write / delete operation |
+| `transaction_initiated` | Financial transaction |
+| `transaction_anomaly` | Transaction outside normal pattern |
+| `unauthorized_access_attempt` | Scope violation attempt |
+| `message_signed` | Agent signed a message with KMS |
+| `message_verification_failed` | Signature verification failed |
+
+**Output:**
+
+```json
+{
+  "inserted": true,
+  "tx_id": "evt_8f3c2a91d4",
+  "risk_score": 0.12,
+  "risk_band": "low",
+  "revocation_check_queued": false,
+  "logged_at": "2026-05-20T10:00:00.000Z"
+}
+```
+
+---
+
+## Recommended usage pattern
+
+A well-behaved agent using Kakunin MCP looks like this:
+
+```ts
+// 1. Before any significant action — check scope
+const scope = await mcp.callTool('verify_agent_scope', {
+  action: 'transaction_initiated',
+  amount_usd: 25_000,
+  venue: 'euronext',
+});
+
+if (!scope.allowed) {
+  throw new Error(`Kakunin blocked action: ${scope.reason}`);
+}
+
+// 2. Check risk — consider self-throttling if medium/high
+const risk = await mcp.callTool('check_risk_score', {});
+if (risk.band === 'high') {
+  await notifyHumanOperator(risk.recommendation);
+  return; // refuse to proceed
+}
+
+// 3. Execute the action
+const trade = await executeTrade({ amount: 25_000, venue: 'euronext' });
+
+// 4. Log the event
+await mcp.callTool('audit_log_append', {
+  event_type: 'transaction_initiated',
+  metadata: { amount: 25_000, currency: 'EUR', venue: 'euronext', trade_id: trade.id },
+});
+```
+
+---
+
+## Environment variables
+
+```bash
+# Required
+KAKUNIN_API_KEY=kak_live_...   # or kak_test_... for sandbox
+KAKUNIN_AGENT_ID=agt_...       # agent's ID from kkn.agents.create()
+
+# Optional
+KAKUNIN_BASE_URL=https://api.kakunin.ai/v1  # override for testing
+```
+
+---
+
+## Sandbox mode
+
+Use a `kak_test_...` API key. The server will connect to the sandbox CA — same tools, no regulatory validity.
+
+```bash
+KAKUNIN_API_KEY=kak_test_... KAKUNIN_AGENT_ID=agt_... npx @kakunin/mcp
+```

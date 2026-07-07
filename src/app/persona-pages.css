@@ -1,0 +1,426 @@
+/* ============================================================
+   PERSONA PAGES — design tokens from landing.css
+   Shared styles for /for-* landing pages
+   ============================================================ */
+
+/* ---- Page shell ----------------------------------------- */
+.pp-page {
+  background: var(--paper);
+  min-height: 100vh;
+}
+
+/* ---- Hero ----------------------------------------------- */
+.pp-hero {
+  position: relative;
+  padding: 80px 0 96px;
+  border-bottom: 1px solid var(--paper-edge);
+  overflow: hidden;
+}
+.pp-hero-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(20,24,27,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20,24,27,0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 80% 70% at 60% 50%, black, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 60% 50%, black, transparent 80%);
+}
+.pp-hero-inner {
+  position: relative;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 32px;
+}
+.pp-breadcrumb {
+  font-family: var(--ff-mono); font-size: 11px;
+  color: var(--ink-3); margin-bottom: 28px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pp-breadcrumb a { color: var(--ink-3); }
+.pp-breadcrumb a:hover { color: var(--ink); }
+.pp-breadcrumb span { color: var(--ink-2); }
+
+.pp-hero-title {
+  font-family: var(--ff-body);
+  font-weight: 700;
+  font-size: clamp(32px, 3.6vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  max-width: 720px;
+  text-wrap: balance;
+  margin: 20px 0 20px;
+}
+.pp-hero-title em {
+  font-style: normal;
+  color: var(--green);
+}
+.pp-hero-sub {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 620px;
+  margin: 0 0 36px;
+}
+.pp-hero-ctas {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 48px;
+}
+.pp-hero-stats {
+  display: flex; gap: 40px; flex-wrap: wrap;
+  padding-top: 36px;
+  border-top: 1px solid var(--paper-edge);
+}
+.pp-hero-stats .stat { display: grid; gap: 3px; }
+.pp-hero-stats .stat-v {
+  font-family: var(--ff-mono); font-size: 20px; font-weight: 500;
+  color: var(--green-deep);
+}
+.pp-hero-stats .stat-l {
+  font-family: var(--ff-mono); font-size: 10px;
+  color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+/* ---- Shared section wrapper ----------------------------- */
+.pp-section {
+  padding: 72px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.pp-section--alt {
+  background: var(--card);
+}
+.pp-section--dark {
+  background: var(--surface-dark);
+  border-bottom: none;
+}
+.pp-section-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.pp-section-head {
+  margin-bottom: 48px;
+}
+.pp-section-num {
+  font-family: var(--ff-mono); font-size: 10px;
+  color: var(--green); letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.pp-section-title {
+  font-family: var(--ff-body);
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 30px);
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+.pp-section--dark .pp-section-title { color: var(--paper); }
+.pp-section-sub {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 580px;
+  margin: 0;
+}
+
+/* ---- Steps grid ----------------------------------------- */
+.pp-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+.pp-step {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+  display: grid; gap: 12px;
+}
+.pp-section--alt .pp-step {
+  background: var(--paper);
+}
+.pp-step-num {
+  font-family: var(--ff-display);
+  font-size: 28px;
+  color: var(--green);
+  line-height: 1;
+}
+.pp-step h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+.pp-step p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  margin: 0;
+}
+.pp-step-code {
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  background: var(--paper);
+  color: var(--green-deep);
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  display: block;
+  overflow-x: auto;
+}
+.pp-section--alt .pp-step-code {
+  background: var(--card);
+}
+
+/* ---- Feature cards -------------------------------------- */
+.pp-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.pp-feature {
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--green);
+  border-radius: var(--r-sm);
+  display: grid; gap: 8px;
+}
+.pp-section--alt .pp-feature {
+  background: var(--paper);
+}
+.pp-section--dark .pp-feature {
+  background: rgba(244,241,232,0.05);
+  border-color: rgba(244,241,232,0.1);
+  border-left-color: var(--green-bright);
+}
+.pp-feature h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+.pp-section--dark .pp-feature h3 { color: var(--paper); }
+.pp-feature p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+}
+.pp-section--dark .pp-feature p { color: rgba(244,241,232,0.65); }
+.pp-feature-tag {
+  font-family: var(--ff-mono); font-size: 11px;
+  color: var(--green-deep); font-weight: 600;
+}
+.pp-section--dark .pp-feature-tag { color: var(--green-bright); }
+
+/* ---- Resource link cards -------------------------------- */
+.pp-resources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.pp-resource-link {
+  display: block;
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  transition: border-color .15s ease, box-shadow .15s ease;
+  text-decoration: none;
+}
+.pp-resource-link:hover {
+  border-color: var(--green);
+  box-shadow: var(--shadow-md);
+}
+.pp-resource-link h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green-deep);
+  margin: 0 0 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pp-resource-link h3::after {
+  content: "→";
+  font-size: 13px;
+}
+.pp-resource-link p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0;
+}
+
+/* ---- Spec / framework table ----------------------------- */
+.pp-table-wrap {
+  overflow-x: auto;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+.pp-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 14px;
+}
+.pp-table thead tr { border-bottom: 2px solid var(--green); }
+.pp-table th {
+  text-align: left;
+  padding: 14px 16px;
+  font-family: var(--ff-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--green-deep); font-weight: 600;
+  white-space: nowrap;
+}
+.pp-table td {
+  padding: 13px 16px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+.pp-table tr:last-child td { border-bottom: none; }
+.pp-table code {
+  font-family: var(--ff-mono); font-size: 12px;
+  background: var(--paper); color: var(--green-deep);
+  padding: 3px 8px; border-radius: var(--r-xs);
+}
+.pp-table-note {
+  font-size: 13px; color: var(--ink-3);
+  margin-top: 12px;
+}
+
+/* ---- CTA section ---------------------------------------- */
+.pp-cta {
+  text-align: center;
+  padding: 80px 32px;
+}
+.pp-cta .pp-cta-title {
+  font-family: var(--ff-body);
+  font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 32px);
+  letter-spacing: -0.02em;
+  color: var(--paper);
+  margin: 0 0 16px;
+}
+.pp-cta .pp-cta-sub {
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(244,241,232,0.65);
+  margin: 0 0 32px;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.pp-cta .pp-cta-actions {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+}
+
+/* ---- Compliance checklist list -------------------------- */
+.pp-checklist {
+  display: grid; gap: 10px;
+  padding: 0; list-style: none; margin: 0;
+}
+.pp-checklist li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 14px; line-height: 1.55; color: var(--ink-2);
+}
+.pp-checklist li::before {
+  content: "✓";
+  font-family: var(--ff-mono); font-size: 12px;
+  color: var(--green); font-weight: 700;
+  flex-shrink: 0; margin-top: 1px;
+}
+.pp-section--dark .pp-checklist li { color: rgba(244,241,232,0.7); }
+.pp-section--dark .pp-checklist li::before { color: var(--green-bright); }
+
+/* ---- Responsive ----------------------------------------- */
+@media (max-width: 768px) {
+  .pp-hero { padding: 56px 0 64px; }
+  .pp-hero-inner { padding: 0 20px; }
+  .pp-section { padding: 48px 0; }
+  .pp-section-inner { padding: 0 20px; }
+  .pp-hero-stats { gap: 24px; }
+  .pp-steps { grid-template-columns: 1fr; }
+  .pp-cta { padding: 56px 20px; }
+}
+
+/* ---- Metrics grid -------------------------------------- */
+.pp-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 28px;
+}
+.pp-metric {
+  padding: 28px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  display: grid; gap: 12px;
+}
+.pp-section--alt .pp-metric {
+  background: var(--paper);
+}
+.pp-section--dark .pp-metric {
+  background: rgba(244,241,232,0.05);
+  border-color: rgba(244,241,232,0.1);
+}
+.pp-metric-value {
+  font-family: var(--ff-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--green-deep);
+  line-height: 1;
+}
+.pp-section--dark .pp-metric-value {
+  color: var(--green-bright);
+}
+.pp-metric-label {
+  font-family: var(--ff-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+.pp-section--dark .pp-metric-label {
+  color: var(--paper);
+}
+.pp-metric-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+}
+.pp-section--dark .pp-metric-desc {
+  color: rgba(244,241,232,0.65);
+}
+
+/* Dark mode overrides for persona pages */
+[data-theme="dark"] .pp-section--dark {
+  background: var(--surface-dark);
+  color: var(--paper);
+}
+[data-theme="dark"] .pp-section--dark .pp-feature p {
+  color: var(--ink-2);
+}
+[data-theme="dark"] .pp-section--dark .pp-checklist li {
+  color: var(--ink-2);
+}
+[data-theme="dark"] .pp-section--dark .pp-checklist li::before {
+  color: var(--green-bright);
+}
+[data-theme="dark"] .term-body {
+  background: #1B2024;
+  color: var(--paper);
+}
+[data-theme="dark"] .term-body .key { color: #A8E6CF; }
+[data-theme="dark"] .term-body .str { color: #FFD93D; }
+[data-theme="dark"] .term-body .num { color: #6BCB77; }
+[data-theme="dark"] .dx-code {
+  background: #1B2024;
+  color: var(--paper);
+}
+[data-theme="dark"] .dx-code .kw { color: #FF6B9D; }
+[data-theme="dark"] .dx-code .fn { color: #A8E6CF; }

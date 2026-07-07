@@ -1,0 +1,234 @@
+export const metadata = {
+  title: "Non-Human Identity: The Next Layer of Digital Trust",
+  description: "A scholarly overview of non-human identity, the security crisis around machine actors, and the best practices that will shape identity governance for AI agents and workloads.",
+  slug: "non-human-identity-scholarship",
+  author: "Kakunin Team",
+  featured: false,
+};
+
+# Non-Human Identity: The Next Layer of Digital Trust
+
+Non-human identity (NHI) has moved from a niche infrastructure concern to a core security and governance problem. In practical terms, NHI refers to the digital identities assigned to software actors rather than people: workloads, services, APIs, bots, service accounts, robots, devices, and increasingly autonomous AI agents. These actors now create, retrieve, transform, and transmit high-value data across production systems. They also outnumber humans by a wide margin in most modern environments, which means that the real boundary of enterprise trust has shifted away from the employee login screen and toward machine-to-machine interaction.
+
+This shift matters because identity is no longer only about proving *who a person is*. It is about proving *what* is acting, *where* it is running, *what authority* it has, and *how long* that authority should last. NIST’s Zero Trust Architecture publication frames the modern security problem exactly this way: there is no implicit trust based on network position, and authentication and authorization must be discrete functions performed before access is granted [1]. SPIFFE extends that idea for dynamic software systems by defining short-lived cryptographic identities for workloads in heterogeneous environments [2]. Together, these frameworks show why NHI is not a side topic. It is the identity substrate for cloud-era and AI-era operations.
+
+Kakunin is built around that premise. If an AI agent or automated workload is going to take meaningful action, it should do so with a verifiable identity, bounded scope, and an auditable trail. That is the operational idea behind per-agent X.509 certificates, KMS-backed key custody, policy enforcement, and tamper-evident audit logging.
+
+---
+
+## What Non-Human Identity Is
+
+At a technical level, a non-human identity is any credentialed digital principal that is not a person but can still authenticate, authorize, and act. The category includes familiar identities such as service accounts, API clients, and daemon processes, but it also increasingly includes ephemeral cloud workloads, data pipelines, CI/CD jobs, robotics systems, and AI agents.
+
+The key property is not that the actor is “machine-like.” It is that the actor is a separate agent in the security model with its own lifecycle:
+
+- it is created,
+- it is granted permissions,
+- it is authenticated,
+- it performs actions,
+- it may be observed, rotated, suspended, or revoked,
+- and it must eventually be retired.
+
+This lifecycle is what differentiates NHI from simple secrets management. A static API key is a credential artifact, but it is not a full identity model. A mature NHI model ties the credential to provenance, attestation, scope, and revocation. That is why modern identity frameworks increasingly favor short-lived, cryptographically bound identities rather than long-lived shared secrets. SPIFFE explicitly describes its model as a framework for securely identifying software systems and issuing short-lived cryptographic identity documents to workloads [2]. NIST’s zero trust guidance similarly treats identity as a first-class control plane input, not a peripheral implementation detail [1].
+
+For AI agents, this distinction becomes even more important. An autonomous agent may be able to plan, call tools, trigger workflows, and decide when to act. If it is merely wrapped in a shared token, the organization cannot reliably answer the basic accountability questions: which agent did it, under what authority, and with what guardrails? That is why the emerging conversation around agent identity is really a conversation about machine accountability.
+
+---
+
+## Common Types of Non-Human Identities
+
+NHI is often discussed as a single category, but different machine actors have different risk profiles and operational needs.
+
+### 1. Service accounts and application identities
+
+These are among the oldest forms of NHI. A service account is used by an application or background process to authenticate to another system. The risk is familiar: long-lived credentials, broad permissions, poor rotation discipline, and limited attribution. When a shared service account is compromised, it can be difficult to determine whether the activity came from the intended application or from an attacker piggybacking on the credential.
+
+### 2. Workload identities
+
+Workload identity refers to the identity of a running software workload: a container, VM, function, or job. This class has become especially important in cloud-native systems because infrastructure is dynamic. Pods are created and destroyed continuously, and IP addresses are no longer a stable trust anchor. SPIFFE’s model addresses this by issuing identity to workloads independent of physical location or host-specific assumptions [2]. The value is portability: identity should follow the workload, not the box.
+
+### 3. API identities and integration principals
+
+APIs are not just endpoints; they are actors in distributed systems. When one service calls another, the call path often represents delegated authority, not merely transport. An API identity may need to prove which client is calling, which tenant it belongs to, and which permission set it inherited. Without that structure, organizations tend to fall back on overbroad bearer tokens that are hard to reason about and easy to abuse.
+
+### 4. CI/CD and automation identities
+
+Build systems, deployment pipelines, and release bots often have privileged access to repositories, registries, cloud environments, and secrets stores. This makes them some of the most sensitive NHIs in the enterprise. Research on workload identity for zero-trust CI/CD emphasizes that static credentials in build systems create unacceptable exposure and that secretless or short-lived identity models reduce the attack surface [3].
+
+### 5. Device and IoT identities
+
+Connected devices also belong in the NHI family. Sensors, controllers, medical devices, factory equipment, and smart endpoints all need cryptographic identity if they are to participate safely in large-scale ecosystems. The challenge is that device identity often survives long after the device has left its original operational context, which makes inventory and lifecycle governance essential.
+
+### 6. Autonomous AI agent identities
+
+This is the newest and most consequential category. AI agents are not merely scripts. They can reason over goals, call tools, spawn sub-tasks, and adapt behavior based on context. That means identity must encode more than authentication. It must encode capability boundaries, delegation rules, and risk constraints. The field is rapidly converging on a model where AI agents are treated as governed principals, not as anonymous application code.
+
+---
+
+## The Security Crisis: Human vs. Non-Human Identities
+
+The security crisis emerges because human identity programs and machine identity programs have historically evolved separately. Humans have HR records, onboarding and offboarding, MFA, device posture checks, and periodic access review. Machines often have none of those safeguards, even though they can run continuously and operate at machine speed.
+
+NIST’s zero trust model is useful here because it explicitly rejects implicit trust and requires evaluation before a resource session is established [1]. That is the right default for both humans and machines, but the mismatch is obvious: human workflows are episodic, while machine workflows are continuous and automated.
+
+The result is a dangerous asymmetry: humans are usually visible in identity governance systems, while machines are often dispersed across cloud, SaaS, and CI/CD platforms. Human privileges are sometimes reviewed; machine privileges are often forgotten. Human sessions expire or require reauthentication; machine tokens may persist for months. That asymmetry creates several risks.
+
+### Credential sprawl
+
+Machine identities are often implemented through secrets: API keys, tokens, passwords, and certificates stored in configuration files or secret managers. The problem is not that secrets are bad. It is that static secrets are easy to copy, hard to attribute, and slow to retire. The larger the environment becomes, the more likely these credentials accumulate in orphaned repos, stale jobs, or forgotten integration paths.
+
+### Overprivilege
+
+Because software systems need to work quickly, teams frequently grant machine identities far more access than they actually need. This violates least privilege and expands blast radius. A compromised service account should not be able to impersonate a release pipeline or read a regulated data set. Yet overprivilege remains common because it is cheaper in the short term than granular authorization design.
+
+### Weak attribution
+
+If multiple workloads share the same identity, incident response becomes murky. Security teams can tell that “a token” was used, but not which process, instance, or delegated agent used it. That is a governance failure, not just an authentication gap.
+
+### Poor lifecycle management
+
+Human identities are usually deprovisioned when employees leave. Machine identities often remain live after the workload dies. Orphaned identities are especially dangerous because they are invisible until they are abused.
+
+### AI-agent amplification
+
+AI agents intensify all of the above. A human can be trained to use one privileged tool. An agent can discover new workflows, chain tools, and make repeated requests at scale. If that agent is compromised, manipulated, or simply over-empowered, the consequences can multiply quickly. This is why the future of identity security will not be solved by adding more passwords. It will be solved by making machine authority explicit, bounded, and observable.
+
+---
+
+## Best Practices for Non-Human Identity Management
+
+Effective NHI management is not a single control. It is a system of linked controls across issuance, authentication, authorization, monitoring, and retirement.
+
+### 1. Give every non-human actor a unique identity
+
+Shared credentials are the enemy of accountability. Each workload, service, bot, and agent should have its own identity so that activity can be traced back to a specific principal. Unique identity also supports granular revocation: when one actor misbehaves, you do not have to shut down an entire class of systems.
+
+### 2. Use short-lived, cryptographically bound credentials
+
+Long-lived secrets are brittle and hard to govern. Short-lived certificates or tokens reduce exposure if something leaks. SPIFFE’s SVID model is a clear example: workloads receive short-lived cryptographic identity documents that support mutual authentication and token-based workflows [2]. The same logic applies to agents.
+
+### 3. Enforce least privilege and scope by default
+
+Every NHI should have a narrow, explicit permission set. Authorization should be based on the minimum effective scope, not on convenience. For AI agents, that means the certificate or policy should encode what the agent can do, not just who issued it.
+
+### 4. Make delegation explicit
+
+Many machine actions are delegated. A pipeline may act on behalf of a developer; an agent may act on behalf of a team; a service may act on behalf of a tenant. Delegation must be recorded, revocable, and bounded.
+
+### 5. Separate identity from network location
+
+Network location is not a trust model. NIST’s zero trust guidance says trust should not be granted simply because a principal is inside a network boundary [1]. In NHI practice, this means an identity must be validated regardless of whether the workload is in Kubernetes, serverless infrastructure, a cloud VM, or a partner environment.
+
+### 6. Continuously monitor behavior
+
+Identity governance cannot stop at issuance. Machines behave differently over time. A job that normally reads records may suddenly begin enumerating secrets or writing to a new destination. Behavioral monitoring detects when a valid identity starts acting in an invalid way.
+
+### 7. Revoke decisively and automatically
+
+Revocation is not a consolation prize. It is one of the primary safety mechanisms in NHI. If a workload is compromised, rotated out, or placed under investigation, its identity should stop working promptly. In a mature platform, revocation should be automated and visible rather than manual and delayed.
+
+### 8. Keep a tamper-evident audit trail
+
+If you cannot reconstruct what an NHI did, the identity model is incomplete. Strong audit logs should record issuance events, policy decisions, signed actions, revocations, and operator interventions.
+
+### 9. Tie identity to attestation where possible
+
+Where the environment supports it, identity should be linked to evidence about the runtime itself: measured boot, workload provenance, image digest, or hardware-backed keys. Attestation reduces the risk that an attacker can clone an identity into an untrusted environment.
+
+### 10. Treat NHI governance as a lifecycle, not a project
+
+The biggest mistake is to view machine identity as a one-time migration. In reality, it is continuous governance. New services appear, old services die, permissions drift, and AI systems evolve.
+
+---
+
+## Use Cases Where NHI Is Applied
+
+Non-human identity is already embedded in most modern production systems, even when teams do not use that label.
+
+### Cloud-native microservices
+
+Microservices need to authenticate to one another. Without NHI, teams tend to rely on network segmentation and static service tokens. With NHI, each service proves who it is cryptographically and can be authorized on that basis.
+
+### CI/CD and software supply chains
+
+Build pipelines sign artifacts, fetch dependencies, deploy infrastructure, and publish releases. These are high-trust actions, which is why CI/CD has become a security hotspot. Workload identity models reduce dependence on static secrets and align better with zero trust supply chain patterns [3].
+
+### Data pipelines and analytics
+
+ETL jobs, data sync processes, and analytics services frequently ingest regulated or sensitive information. Per-job identity helps distinguish legitimate batch processing from unauthorized bulk extraction.
+
+### Partner integrations and B2B automation
+
+External integrations often operate with broad access because they must “just work.” NHI discipline allows each partner automation to be scoped precisely and monitored continuously.
+
+### IoT and edge environments
+
+Connected devices operate in heterogeneous and sometimes physically exposed environments. Device identity is essential for authenticity, integrity, fleet management, and remote revocation.
+
+### Robotics and industrial systems
+
+Industrial controllers and autonomous systems need machine identity to prevent spoofing, limit command authority, and maintain auditability across operational technology environments.
+
+### AI agents and agentic workflows
+
+This is the most strategically important use case now emerging. AI agents can query tools, execute workflows, coordinate with other agents, and act over long-lived business processes. NHI gives organizations a way to govern those agents as accountable principals rather than anonymous automation.
+
+Kakunin’s model fits especially well here. A regulated AI agent can receive an X.509 certificate, operate under an explicit scope policy, log every state-changing action, and be revoked if its behavior exceeds bounds. That turns “the agent did it” from a vague explanation into a cryptographically traceable record.
+
+---
+
+## How the Future Will Incorporate NHI
+
+The next generation of identity architecture will likely collapse the artificial divide between human and machine identity. The enterprise of the future will not have one IAM stack for people and another forgotten system for software. It will have a unified identity plane with different credential forms, different policy models, and different risk signals, but one common governance logic.
+
+Several trends point in that direction.
+
+### 1. Zero trust will become the default design assumption
+
+NIST’s framework already points the way: trust is no longer implied by location, and every access request must be evaluated [1]. As AI agents proliferate, zero trust will stop being a specialized architecture and become the baseline expectation.
+
+### 2. Workload identity will replace many static secrets
+
+The operational future is likely to be more secretless and more ephemeral. Rather than embedding credentials in pipelines and code, systems will mint identities at runtime and bind them to attestation and policy. SPIFFE has already demonstrated the shape of this future for workloads [2].
+
+### 3. Authorization will become more contextual
+
+Identity alone is not enough. The future will increasingly use context such as action intent, transaction value, risk score, time, workload posture, and delegation chain. In other words, identity will be necessary but not sufficient.
+
+### 4. AI agents will need behavioral governance
+
+Unlike deterministic jobs, AI agents can vary their actions. That means future NHI systems will not only authenticate agents; they will also monitor whether the agent’s behavior still matches the approved mission. This is one reason AI governance frameworks such as NIST’s AI RMF matter: they provide a language for risk, measurement, and ongoing management [4].
+
+### 5. Compliance will move closer to runtime evidence
+
+Regulated organizations will increasingly be asked not just whether they have policies, but whether they can prove enforcement. NHI systems that produce signed, auditable, exportable evidence will have a practical advantage because they reduce the gap between policy and proof.
+
+### 6. Identity will become a product boundary
+
+As more organizations deploy autonomous systems, identity governance will be part of product design, not just infrastructure hygiene. Buyers will ask whether an agent can be uniquely identified, scoped, monitored, and revoked. Vendors that cannot answer those questions will struggle in regulated markets.
+
+Kakunin is positioning for exactly that future. The platform’s certificate issuance, KMS-backed key custody, audit logging, delegation support, and policy-oriented controls are aimed at making non-human identity operational rather than theoretical.
+
+---
+
+## Conclusion
+
+Non-human identity is the identity problem of the machine age. It is the practical foundation for secure cloud systems, resilient software supply chains, governed AI agents, and auditable automation. The core lesson is simple: if a non-human actor can take action, it must also carry responsibility in a form the organization can verify. That means unique identity, least privilege, short-lived credentials, explicit delegation, continuous monitoring, and revocation. NIST’s zero trust model provides the architectural philosophy [1], SPIFFE provides a workload identity model [2], and NIST AI RMF supplies a governance language for AI risk [4]. For Kakunin, that future is already the design target: per-agent identity, KMS-backed cryptography, tamper-evident audit trails, and policy-driven control for AI systems that need to operate safely in regulated environments.
+
+---
+
+## References
+
+[1] Scott Rose, Oliver Borchert, Stu Mitchell, Sean Connelly. *Zero Trust Architecture (NIST SP 800-207).* National Institute of Standards and Technology, August 2020. [https://doi.org/10.6028/NIST.SP.800-207](https://doi.org/10.6028/NIST.SP.800-207)
+
+[2] SPIFFE Project. *SPIFFE Overview.* Open-source workload identity specification. [https://spiffe.io/docs/latest/spiffe-about/overview/](https://spiffe.io/docs/latest/spiffe-about/overview/)
+
+[3] Surya Teja Avirneni. *Establishing Workload Identity for Zero Trust CI/CD: From Secrets to SPIFFE-Based Authentication.* arXiv, 2025. [https://arxiv.org/abs/2504.14760](https://arxiv.org/abs/2504.14760)
+
+[4] National Institute of Standards and Technology. *Artificial Intelligence Risk Management Framework (AI RMF 1.0).* NIST, 2023. [https://www.nist.gov/itl/ai-risk-management-framework](https://www.nist.gov/itl/ai-risk-management-framework)
+
+[5] Surya Teja Avirneni. *Identity Control Plane: The Unifying Layer for Zero Trust Infrastructure.* arXiv, 2025. [https://arxiv.org/abs/2504.17759](https://arxiv.org/abs/2504.17759)
+
+[6] Kakunin. *AI Agent Identity Explained: Cryptographic Proof for Autonomous Systems.* [/blog/ai-agent-identity-explained](/blog/ai-agent-identity-explained)
+
+[7] Kakunin. *How to Govern AI Agents Without a PKI Team.* [/blog/govern-ai-agents-without-pki-team](/blog/govern-ai-agents-without-pki-team)

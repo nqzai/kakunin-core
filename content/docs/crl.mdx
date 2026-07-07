@@ -1,0 +1,80 @@
+---
+title: Certificate Revocation List (CRL)
+description: Offline revocation checking for air-gapped environments via standard X.509 Certificate Revocation List. No online dependency.
+---
+
+The Kakunin CA publishes a standard X.509 CRL that customers can download and cache locally
+for offline revocation checking. This is the recommended approach for:
+
+- Air-gapped environments (defence, some banking, some pharma)
+- High-throughput gateways that cannot afford per-request latency to `/v1/verify/:serial`
+- Regulated environments that require offline-capable certificate validation
+
+## Download the CRL
+
+```
+GET https://api.kakunin.ai/v1/crl
+```
+
+**DER format** (for use with OpenSSL, Java, Go x509 stdlib):
+
+```http
+GET /v1/crl HTTP/1.1
+Accept: application/pkix-crl
+```
+
+Response: `Content-Type: application/pkix-crl`, binary DER file.
+
+**PEM format** (default, human-readable):
+
+```http
+GET /v1/crl HTTP/1.1
+Accept: application/x-pem-file
+```
+
+Response: `-----BEGIN X509 CRL----- ...`
+
+## Response Headers
+
+| Header | Meaning |
+|--------|---------|
+| `X-CRL-Generated-At` | ISO 8601 timestamp when this CRL was generated |
+| `X-CRL-Next-Update` | ISO 8601 timestamp after which this CRL may be stale |
+| `Cache-Control` | `public, s-maxage=3600` — CDN-cacheable for 1 hour |
+
+## Update Schedule
+
+The CRL is regenerated:
+
+1. **Immediately on every revocation** — a QStash job fires within seconds of a certificate being revoked via `POST /v1/certificates/:id/revoke` or the kill switch endpoint
+2. **Every 24 hours** — a scheduled QStash job ensures the CRL is never stale even without activity
+
+The `nextUpdate` field inside the CRL itself is always set to 25 hours from generation time,
+giving a 1-hour buffer before the next scheduled refresh.
+
+## Verify a Certificate Offline
+
+Using OpenSSL:
+
+```bash
+## Download the CRL
+curl -o kakunin-agents.crl https://api.kakunin.ai/v1/crl
+
+## Download the CA certificate
+curl -o kakunin-ca.pem https://api.kakunin.ai/v1/ca
+
+## Verify a certificate against the CRL
+openssl verify \
+  -CAfile kakunin-ca.pem \
+  -crl_check \
+  -CRLfile kakunin-agents.crl \
+  agent-cert.pem
+```
+
+## Limitations
+
+- The CRL is only as fresh as the last regeneration. A cert revoked 30 seconds ago may not
+  appear in the cached copy you downloaded 20 minutes ago. For real-time revocation, use
+  `/v1/verify/:serial` with the `@kakunin/sdk/verify` middleware and its webhook-driven cache eviction.
+- The CRL covers all tenants. It does not expose which tenant owns a given serial number.
+- The CRL does not include expiry reason codes in the current v1 format.

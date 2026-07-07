@@ -1,0 +1,170 @@
+---
+title: Enforcement Headers
+description: How to propagate and verify agent certificate serials across service boundaries.
+---
+
+# Enforcement Headers
+
+Every Kakunin-issued certificate has a serial number. When your agent sends an outbound HTTP request to another service — or when your gateway receives an inbound request from an agent — the certificate serial travels in a standard header so downstream services can verify the caller's identity without a Kakunin account.
+
+## The Header
+
+```
+X-Kakunin-Cert-Serial: <certificate-serial-number>
+```
+
+**Example:**
+
+```http
+POST /v1/risk/approve HTTP/1.1
+Host: risk-engine.internal
+Authorization: Bearer <agent-jwt>
+X-Kakunin-Cert-Serial: 3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4
+Content-Type: application/json
+
+{"trade_id": "T-984231", "amount_usd": 50000}
+```
+
+## AI Agent Token Spend Limits & Financial Scopes
+
+To enforce transaction safety and prevent runaway loops, developers configure granular spend limits and action permissions in their agent registrations. These limits are cryptographically bound inside the X.509 certificate.
+
+When downstream APIs receive requests, the enforcement middleware checks these values to ensure the agent does not exceed:
+- **`max_single_trade_usd`**: The maximum allowable value per transaction.
+- **`daily_limit_usd`**: Cumulative daily limit for the agent instance.
+- **`permitted_actions`**: Explicit scopes (e.g. `read:invoices`, `write:drafts`) verifying exactly what tools the agent is allowed to invoke.
+
+These parameters function as hard cryptographic boundaries, preventing cost overruns and compliance failures.
+
+## Convention
+
+| Rule | Detail |
+|---|---|
+| Header name | `X-Kakunin-Cert-Serial` (case-insensitive per HTTP spec) |
+| Value format | Colon-separated uppercase hex bytes — same as `serial_number` in `GET /v1/agents/:id/certify` response |
+| Who sets it | The calling agent (your code), not Kakunin infrastructure |
+| Who reads it | Receiving service — passes to `GET /v1/verify/:serial` or `POST /v1/verify/message` |
+| Required? | Convention, not enforced by Kakunin API — your gateway decides |
+
+## Verifying an Inbound Request
+
+When a service receives a request with `X-Kakunin-Cert-Serial`, it can verify the caller in two ways:
+
+### 1. Identity check only (no signature)
+
+Call `GET /v1/verify/:serial` (no auth required) to confirm the certificate is active and get the agent's authorized scope:
+
+```typescript
+const serial = req.headers['x-kakunin-cert-serial'];
+
+const res = await fetch(`https://api.kakunin.ai/v1/verify/${serial}`);
+const { data } = await res.json();
+
+if (data.status !== 'active') {
+  return reply.status(403).json({ error: 'Agent certificate not active' });
+}
+
+// data.financial_scope.max_single_trade_usd — compare against request amount
+// data.permitted_actions — compare against requested action
+```
+
+### 2. Signature verification (tamper-proof)
+
+When the calling agent signs its request payload via `POST /v1/agents/:id/sign`, the receiver verifies the signature using `POST /v1/verify/message`. The serial ties the signature to the cert:
+
+```typescript
+const serial   = req.headers['x-kakunin-cert-serial'];
+const signature = req.headers['x-kakunin-signature'];  // set by agent alongside serial
+
+const res = await fetch('https://api.kakunin.ai/v1/verify/message', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    payload: req.body,
+    signature,
+    certificateSerial: serial,
+  }),
+});
+
+const { data } = await res.json();
+
+if (!data.valid) {
+  // Signature invalid — possible spoofing attempt
+  // Kakunin automatically writes a message_verification_failed event
+  // and fires a risk.alert webhook on your behalf
+  return reply.status(403).json({ error: 'Agent message signature invalid' });
+}
+```
+
+## Companion Header for Signed Requests
+
+When using message signing, agents should send both headers together:
+
+```
+X-Kakunin-Cert-Serial: 3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4
+X-Kakunin-Signature: base64encodedSignature==
+```
+
+`X-Kakunin-Signature` carries the base64 signature returned by `POST /v1/agents/:id/sign`. The receiving service passes both to `POST /v1/verify/message`.
+
+## Gateway Middleware Package
+
+`@kakunin/middleware` is a drop-in npm package that handles header reading, API verification, in-process caching, and scope enforcement in one line.
+
+> **Source:** [`nqzai/kakunin-integrations`](https://github.com/nqzai/kakunin-integrations) (npm workspace) — Apache-2.0, published to npm with provenance.
+
+```bash
+npm install @kakunin/middleware
+```
+
+**Express:**
+
+```typescript
+import { kakuninGateway } from '@kakunin/middleware/express';
+
+app.use(kakuninGateway({
+  requiredScope: 'transactions:write', // optional scope enforcement
+  cacheMs: 5000,                       // cache verify calls for 5s
+}));
+
+app.post('/trade', (req, res) => {
+  // req.kakunin attached — agent identity, scope, expiry
+  res.json({ by: req.kakunin?.agent?.name });
+});
+```
+
+**Next.js (`middleware.ts`):**
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { withKakunin } from '@kakunin/middleware/next';
+
+export function middleware(req: NextRequest) {
+  return withKakunin(req, { NextResponse, requiredScope: 'transactions:write' });
+}
+
+export const config = { matcher: ['/api/trade/:path*'] };
+```
+
+**Fastify:**
+
+```typescript
+import { kakuninPlugin } from '@kakunin/middleware/fastify';
+await app.register(kakuninPlugin, { requiredScope: 'transactions:write' });
+```
+
+The package caches verify responses in-process (default 5s TTL) so cache hits cost under 1ms. All rejections return structured `{ error: 'agent_revoked' | 'agent_expired' | 'scope_violation' | ... }` JSON.
+
+## Audit Test Coverage
+
+| Audit Test | How this header helps |
+|---|---|
+| Test #6 — Inter-Agent Spoofing | Receiver calls `POST /v1/verify/message` with serial + signature; injected messages fail (no valid signature) |
+| Test #8 — Kill Switch | Halted agent's cert is revoked; `GET /v1/verify/:serial` returns `status: revoked`; gateway blocks immediately |
+| Test #1 — Trade Reconstruction | Serial in each chain event maps to cert at issuance time, including `model_hash` |
+
+## Security Notes
+
+- **Never trust the serial alone** — always verify against the Kakunin API. The header is a pointer, not proof.
+- **Revocation propagates immediately** — no TTL cache on the verify endpoint by design. A halted agent is blocked on the next request.
+- **Verify endpoint is public** — no Kakunin API key needed for `GET /v1/verify/:serial` or `POST /v1/verify/message`. Your downstream services don't need a Kakunin account.

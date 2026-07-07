@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kakunin logo">
+  <title>Kakunin</title>
+  <path fill="#2B934F" d="M56 56h128v400H56z"/>
+  <path fill="#2B934F" d="M184 56h216L264 256H184z"/>
+  <path fill="#2B934F" d="M184 256h80l136 200H184z"/>
+</svg>

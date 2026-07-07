@@ -1,0 +1,294 @@
+{
+  "generated_at": "2026-07-07T09:46:45.560Z",
+  "commit": "63a93f0",
+  "branch": "main",
+  "unit": {
+    "files": 39,
+    "total": 390,
+    "passed": 369,
+    "failed": 0,
+    "skipped": 21,
+    "duration_ms": 11163,
+    "suites": [
+      {
+        "file": "__tests__/api/agents.test.ts",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/assessment.test.ts",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/certify.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/events.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/halt.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/mcp.test.ts",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/provision-inbox.test.ts",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/report-quotas.test.ts",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/revoke.test.ts",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/verify.test.ts",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/webhook-delivery.test.ts",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/webhooks.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/api/webmcp.test.ts",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/assessment/llm.test.ts",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/assessment/scan.test.ts",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/email/assessment-template.test.ts",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/email/system-templates.test.ts",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/security/rls-isolation.test.ts",
+        "passed": 0,
+        "failed": 0,
+        "skipped": 21
+      },
+      {
+        "file": "__tests__/unit/assessment-rate-limit.test.ts",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/audit-hmac.test.ts",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/bearer-auth.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/blog-route-safety.test.ts",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/connections-cursor.test.ts",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/content-risk.test.ts",
+        "passed": 28,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/credentials-crypto.test.ts",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/delegation.test.ts",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/forensics-proof.test.ts",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/github-gate.test.ts",
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/inbox-providers.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/openrouter-client.test.ts",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/otlp-transform.test.ts",
+        "passed": 25,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/risk-engine.test.ts",
+        "passed": 23,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/standards-map.test.ts",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/url-guard.test.ts",
+        "passed": 25,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "__tests__/unit/vc-decode.test.ts",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "mcp/kakunin-mcp/tests/mcp.test.ts",
+        "passed": 16,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "sdk/middleware/tests/verify.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "sdk/typescript/tests/sdk.test.ts",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "sdk/typescript/tests/verify.test.ts",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "smoke": {
+    "ran_at": "2026-07-07T09:46:33.881Z",
+    "base_url": "https://www.kakunin.ai",
+    "passed": 5,
+    "failed": 0,
+    "skipped": 1,
+    "checks": [
+      {
+        "name": "delegation: issue + verify round-trip",
+        "status": "pass",
+        "detail": "valid token, 2-link chain",
+        "ms": 4639
+      },
+      {
+        "name": "delegation: rejects a tampered token",
+        "status": "pass",
+        "detail": "rejected as expected",
+        "ms": 326
+      },
+      {
+        "name": "content-risk: accepts a submission (202)",
+        "status": "pass",
+        "detail": "enqueued (benign text → scored async, below persist threshold)",
+        "ms": 786
+      },
+      {
+        "name": "forensics: returns a signed proof",
+        "status": "pass",
+        "detail": "forensics export OK",
+        "ms": 1216
+      },
+      {
+        "name": "otlp: connect → status → delete lifecycle",
+        "status": "pass",
+        "detail": "connect/status/delete all OK (cleaned up)",
+        "ms": 2414
+      },
+      {
+        "name": "github gate: returns a decision",
+        "status": "skip",
+        "detail": "mutating — set KAKUNIN_SMOKE_RUN_GATE=1 (throwaway agent only)",
+        "ms": 0
+      }
+    ]
+  }
+}

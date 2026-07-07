@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sitemap — Kakunin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #fafafa;
+      color: #1a1a1a;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+    h1 { font-size: 2.5rem; margin-bottom: 10px; color: #000; }
+    .subtitle { color: #666; font-size: 1.1rem; margin-bottom: 40px; }
+    .section {
+      margin-bottom: 50px;
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #0066cc;
+    }
+    .section-description {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    .links {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+    }
+    .link-item {
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      border-left: 3px solid #0066cc;
+      transition: all 0.2s;
+    }
+    .link-item:hover {
+      background: #f0f5ff;
+      transform: translateX(5px);
+    }
+    .link-item a {
+      color: #0066cc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .link-item a:hover { text-decoration: underline; }
+    .link-meta {
+      font-size: 0.85rem;
+      color: #999;
+      margin-top: 8px;
+    }
+    .priority-high { border-left-color: #28a745; }
+    .priority-medium { border-left-color: #ffc107; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th { background: #f5f5f5; font-weight: 600; }
+    tr:hover { background: #fafafa; }
+    .breadcrumb { color: #999; font-size: 0.9rem; margin-bottom: 20px; }
+    footer { text-align: center; color: #999; margin-top: 80px; padding-top: 40px; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kakunin Sitemap</h1>
+    <p class="subtitle">Complete navigation guide to all documentation, APIs, and resources</p>
+
+    <!-- Getting Started -->
+    <div class="section">
+      <h2>Getting Started</h2>
+      <p class="section-description">Essential reading for teams new to AI agent compliance. Explains core concepts (identity, behavioral monitoring, revocation), how Kakunin integrates with regulatory frameworks, and what problems the platform solves. Audience: CTOs, compliance officers, product leaders.</p>
+      <div class="links">
+        <div class="link-item priority-high">
+          <a href="/docs">Documentation Hub</a>
+          <div class="link-meta">→ Start here</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/concepts">Core Concepts &amp; Regulatory Frameworks</a>
+          <div class="link-meta">→ Foundations</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Case Studies -->
+    <div class="section">
+      <h2>Case Studies</h2>
+      <p class="section-description">Real-world deployments across 6 regulated industries: trading, AML, healthcare, legal, supply chain, and public sector. Each case study includes measurable outcomes, compliance evidence, and technical architecture. Audience: Risk managers, compliance teams, prospective customers.</p>
+      <div class="links">
+        <div class="link-item priority-high">
+          <a href="/docs/case-studies">Case Studies Hub</a>
+          <div class="link-meta">→ All industries</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-trading">Quantitative Trading Agents</a>
+          <div class="link-meta">→ Financial Services</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-aml">AML &amp; Fraud-Detection Agents</a>
+          <div class="link-meta">→ Financial Crime</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-healthcare">Diagnostic Assistants on EHR</a>
+          <div class="link-meta">→ Healthcare</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-legal">Document-Review Agents</a>
+          <div class="link-meta">→ Legal</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-supply-chain">Automated Customs Brokers</a>
+          <div class="link-meta">→ Supply Chain</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/case-study-public-sector">Visa &amp; Tax Processing Agents</a>
+          <div class="link-meta">→ Public Sector</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Integration Guide -->
+    <div class="section">
+      <h2>Integration Guide</h2>
+      <p class="section-description">Step-by-step technical documentation for developers. Covers API authentication, agent registration, certificate issuance, event ingestion, certificate verification, and webhook setup. Includes code examples and integration timelines. Audience: Backend engineers, DevOps, solutions architects.</p>
+      <div class="links">
+        <div class="link-item priority-high">
+          <a href="/docs/authentication">API Authentication</a>
+          <div class="link-meta">→ Start here</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/agents">Agent Registration</a>
+          <div class="link-meta">→ Register agents</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/certificates">Certificate Issuance</a>
+          <div class="link-meta">→ Issue certs</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/event-ingest">Event Ingestion</a>
+          <div class="link-meta">→ Stream events</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/verify">Certificate Verification</a>
+          <div class="link-meta">→ Verify agents</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/webhooks">Webhooks &amp; Event Delivery</a>
+          <div class="link-meta">→ Async notifications</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Operations -->
+    <div class="section">
+      <h2>Operations</h2>
+      <p class="section-description">Operational playbooks for managing deployed agents. Covers certificate enforcement, auto-revocation triggers, Certificate Revocation List (CRL) management, and SLA terms. Audience: DevOps engineers, compliance officers, on-call teams.</p>
+      <div class="links">
+        <div class="link-item priority-medium">
+          <a href="/docs/enforcement">Certificate Enforcement</a>
+          <div class="link-meta">→ Enforce certs</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/crl">Certificate Revocation List</a>
+          <div class="link-meta">→ CRL access</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/sla">Service Level Agreement</a>
+          <div class="link-meta">→ SLA terms</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reference -->
+    <div class="section">
+      <h2>Reference</h2>
+      <p class="section-description">Complete API documentation, SDK guides, error codes, and troubleshooting. Includes OpenAPI 3.0 spec, TypeScript/Python SDK reference, HTTP status codes, and common error resolutions. Audience: Developers, API consumers, integration partners.</p>
+      <div class="links">
+        <div class="link-item priority-high">
+          <a href="/docs/sdks">SDKs &amp; Client Libraries</a>
+          <div class="link-meta">→ TypeScript, Python</div>
+        </div>
+        <div class="link-item priority-high">
+          <a href="/docs/api-reference">API Reference</a>
+          <div class="link-meta">→ OpenAPI 3.0</div>
+        </div>
+        <div class="link-item priority-medium">
+          <a href="/docs/errors">Error Codes &amp; Troubleshooting</a>
+          <div class="link-meta">→ Error handling</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compliance &amp; Trust -->
+    <div class="section">
+      <h2>Compliance &amp; Trust</h2>
+      <p class="section-description">Security posture, test coverage, and performance metrics. Includes automated test results (106/106 passing), security certifications (SOC 2 roadmap), data residency (EU-west-1), encryption standards, and WORM audit log proof. Audience: InfoSec teams, auditors, risk officers, customers.</p>
+      <div class="links">
+        <div class="link-item priority-high">
+          <a href="/test-results">Automated Test Results (106/106 Passing)</a>
+          <div class="link-meta">→ Test coverage</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Regulatory Frameworks -->
+    <div class="section">
+      <h2>Regulatory Frameworks</h2>
+      <p class="section-description">How Kakunin satisfies global compliance requirements: MiCA (articles 61–75), EU AI Act (annexes III, articles 13–15), GDPR (articles 22, 30), and HIPAA. Maps specific requirements to Kakunin features. Audience: Legal teams, compliance officers, regulators, audit teams.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Framework</th>
+            <th>Scope</th>
+            <th>Articles/Annexes</th>
+            <th>Kakunin Coverage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MiCA</strong></td>
+            <td>Cryptographic asset custody &amp; AI governance</td>
+            <td>61–75</td>
+            <td>X.509 certs, risk scoring, auto-revocation</td>
+          </tr>
+          <tr>
+            <td><strong>EU AI Act</strong></td>
+            <td>High-risk system logging &amp; oversight</td>
+            <td>III, 13–15</td>
+            <td>Immutable audit log, transparency endpoint, behavioral proof</td>
+          </tr>
+          <tr>
+            <td><strong>GDPR</strong></td>
+            <td>Automated decisions &amp; processing records</td>
+            <td>22, 30</td>
+            <td>Full audit trail, exportable for DPA</td>
+          </tr>
+          <tr>
+            <td><strong>HIPAA</strong></td>
+            <td>Healthcare privacy &amp; audit trails</td>
+            <td>Full coverage</td>
+            <td>WORM audit log, read-only cert scope</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Public APIs -->
+    <div class="section">
+      <h2>Public APIs</h2>
+      <p class="section-description">No-auth endpoints for regulators, auditors, and counterparties. Designed for independent agent certificate verification without needing Kakunin credentials. Audience: Regulators, auditors, verification systems.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Purpose</th>
+            <th>Rate Limit</th>
+            <th>Latency (p99)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GET /api/v1/verify/{cert_serial}</code></td>
+            <td>Verify agent certificate (no auth required)</td>
+            <td>1,000 req/min per IP</td>
+            <td>&lt;500ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- AI Discovery Files -->
+    <div class="section">
+      <h2>For AI Systems &amp; LLMs</h2>
+      <p class="section-description">Machine-readable content optimized for AI crawlers and LLM consumption. Includes full documentation, FAQ, brand guidelines, and discovery metadata. Audience: LLMs, AI assistants, autonomous agents.</p>
+      <div class="links">
+        <div class="link-item">
+          <a href="/llms.txt">llms.txt — Structured Index</a>
+          <div class="link-meta">→ LLM-friendly overview</div>
+        </div>
+        <div class="link-item">
+          <a href="/llms-full.txt">llms-full.txt — Complete Documentation</a>
+          <div class="link-meta">→ Full markdown content</div>
+        </div>
+        <div class="link-item">
+          <a href="/.ai/ai.md">AI Overview (Markdown)</a>
+          <div class="link-meta">→ Complete product doc</div>
+        </div>
+        <div class="link-item">
+          <a href="/.ai/faq.json">FAQ (JSON)</a>
+          <div class="link-meta">→ 20 Q&amp;A pairs</div>
+        </div>
+        <div class="link-item">
+          <a href="/.ai/identity.md">Identity Summary</a>
+          <div class="link-meta">→ One-paragraph summary</div>
+        </div>
+        <div class="link-item">
+          <a href="/.ai/sitemap.json">Content Sitemap (JSON)</a>
+          <div class="link-meta">→ Full site structure</div>
+        </div>
+        <div class="link-item">
+          <a href="/ai.txt">AI Crawling Rules</a>
+          <div class="link-meta">→ robots.txt equivalent</div>
+        </div>
+        <div class="link-item">
+          <a href="/api/v1/openapi.json">OpenAPI Spec</a>
+          <div class="link-meta">→ Machine-readable API</div>
+        </div>
+        <div class="link-item">
+          <a href="/.well-known/agent.json">Agent Card (A2A)</a>
+          <div class="link-meta">→ Agent discovery</div>
+        </div>
+        <div class="link-item">
+          <a href="/.well-known/mcp.json">MCP Server Card</a>
+          <div class="link-meta">→ Model Context Protocol</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>Last updated: 2026-05-24 | <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="/pricing">Pricing</a></p>
+      <p style="margin-top: 10px; font-size: 0.85rem;">For machine-readable sitemap, see <a href="/sitemap.xml">sitemap.xml</a> or <a href="/.ai/sitemap.json">AI sitemap (JSON)</a></p>
+    </footer>
+  </div>
+</body>
+</html>

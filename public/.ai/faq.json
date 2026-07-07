@@ -1,0 +1,104 @@
+{
+  "faq": [
+    {
+      "id": "what-is-kakunin",
+      "question": "What is Kakunin?",
+      "answer": "Kakunin is cryptographic identity and behavioral monitoring infrastructure for AI agents operating in regulated industries. We issue X.509 certificates to agents, monitor their behavior in real-time, and generate immutable audit logs that satisfy MiCA and EU AI Act compliance requirements."
+    },
+    {
+      "id": "who-needs-kakunin",
+      "question": "Who needs Kakunin?",
+      "answer": "Financial institutions, fintechs, healthcare systems, law firms, logistics companies, and government agencies deploying autonomous AI agents. Specifically: compliance officers (audit trails), CTOs (behavioral proof + revocation), and CEOs (first-mover advantage in regulated AI deployment)."
+    },
+    {
+      "id": "how-does-kakunin-work",
+      "question": "How does Kakunin work?",
+      "answer": "1. Register an AI agent via API. 2. Kakunin issues an X.509 certificate (tied to agent scope, e.g., max transaction size). 3. Agent streams behavioral events to Kakunin. 4. System calculates rolling 30-day risk score; if score exceeds 0.85, certificate is auto-revoked (<100ms). 5. Every action is logged immutably and can be audited by regulators or counterparties."
+    },
+    {
+      "id": "private-keys-storage",
+      "question": "Where are private keys stored?",
+      "answer": "In AWS KMS only. Kakunin never has access to plaintext private key material. We store only the kms_key_arn in the database. Signing operations are performed by KMS directly, ensuring private keys never leave the HSM."
+    },
+    {
+      "id": "regulatory-alignment",
+      "question": "Is Kakunin compliant with MiCA and EU AI Act?",
+      "answer": "Kakunin is built to satisfy MiCA Art. 61–75 (governance, internal controls, operational resilience) and EU AI Act Annex III (high-risk logging) + Art. 13–15 (transparency, oversight, robustness). Kakunin provides the infrastructure; customers are responsible for implementing compliant use of that infrastructure."
+    },
+    {
+      "id": "auto-revocation",
+      "question": "What is auto-revocation?",
+      "answer": "When an agent's rolling 30-day risk score crosses 0.85 (configurable), Kakunin automatically revokes its certificate within 60 seconds. Revoked agents cannot execute transactions. Webhook fires immediately, and the compliance officer receives an alert. All revocations are logged immutably."
+    },
+    {
+      "id": "behavioral-monitoring",
+      "question": "How does behavioral monitoring work?",
+      "answer": "Agents stream events (transaction, data access, error, etc.) to Kakunin. The system calculates risk for each event (0–1 scale, 0=safe, 1=high-risk). Risk scores roll over 30 days. Anomalies vs. baseline behavior trigger higher scores. Thresholds can be customized per agent."
+    },
+    {
+      "id": "audit-trail-immutability",
+      "question": "How do you ensure audit logs can't be modified?",
+      "answer": "Audit logs are stored in WORM (Write-Once-Read-Many) storage via Supabase's append-only table configuration and database constraints. No UPDATE or DELETE operations are permitted. Every entry is timestamped and cryptographically signed by the agent that performed the action."
+    },
+    {
+      "id": "public-verification",
+      "question": "Can anyone verify an agent's certificate?",
+      "answer": "Yes. The /v1/verify endpoint is public (no authentication required). Regulators, auditors, or counterparties can query https://api.kakunin.ai/v1/verify/{cert_serial} and receive the agent's identity, scope, model version hash, revocation status, and full history in <500ms."
+    },
+    {
+      "id": "pricing",
+      "question": "How much does Kakunin cost?",
+      "answer": "Starter: €195/month (5 agents, 100K events/month). Pro: €1,980/month (50 agents, 10M events/month). Enterprise: Custom pricing. Free 30-day trial available (card required, no charge until day 31)."
+    },
+    {
+      "id": "integration-time",
+      "question": "How long does integration take?",
+      "answer": "Register + certify first agent: <3 seconds. Stream events: ~15 minutes setup. First compliance report: within 24 hours. Most teams integrate fully in under a day."
+    },
+    {
+      "id": "sdks-available",
+      "question": "What SDKs are available?",
+      "answer": "TypeScript SDK (@kakunin/sdk) is available now with Zod validation, automatic retry, and sandbox mode. Python SDK is on the V1.1 roadmap. REST API (OpenAPI 3.0) is available for any language."
+    },
+    {
+      "id": "data-residency",
+      "question": "Where is my data stored?",
+      "answer": "Data residency: EU (eu-west-1 on AWS). Encryption: AES-256 + TLS 1.3. GDPR compliant. Enterprise customers can request dedicated Supabase instances."
+    },
+    {
+      "id": "compliance-vs-governance",
+      "question": "Is Kakunin a model governance tool?",
+      "answer": "No. Model governance tools (like Credo AI or Arthur AI) score the model itself. Kakunin issues identity to a deployed agent and watches what it does. They are complementary: governance scores the model, Kakunin proves the deployed agent stayed in scope."
+    },
+    {
+      "id": "human-kYc-tools",
+      "question": "How is Kakunin different from human KYC tools (Jumio, Onfido, Sumsub)?",
+      "answer": "Those verify humans. Kakunin verifies AI agents—their identity, behavior, and model lineage. Kakunin is not a replacement for human KYC; it's the missing primitive that sits next to it. We expect to partner with those incumbents, not compete."
+    },
+    {
+      "id": "kill-switch",
+      "question": "Does Kakunin have a kill switch?",
+      "answer": "Yes. Two options: 1. Auto-revocation (when risk crosses 0.85, automatic within 60 seconds). 2. Manual revocation (compliance officer revokes immediately via dashboard or API). Both are cryptographically signed and logged immutably."
+    },
+    {
+      "id": "us-frameworks",
+      "question": "Do you support US regulatory frameworks?",
+      "answer": "V1.0 targets EU frameworks (MiCA, EU AI Act, GDPR). SEC and FCA frameworks are on the V2.0 roadmap, planned alongside US market entry in 2027."
+    },
+    {
+      "id": "self-hosting",
+      "question": "Can I self-host Kakunin?",
+      "answer": "Not at V1.0. The value of Kakunin is the network effect of a single trusted certificate authority—self-hosting undermines that. Enterprise customers can request a dedicated Supabase instance for data residency."
+    },
+    {
+      "id": "soc2-certification",
+      "question": "Is Kakunin SOC 2 certified?",
+      "answer": "SOC 2 Type II certification is in progress (expected by Q3 2026). In the meantime, we maintain GDPR compliance, data residency in EU (eu-west-1), encryption (AES-256 + TLS 1.3), and immutable audit logs."
+    },
+    {
+      "id": "support-channels",
+      "question": "How do I contact Kakunin support?",
+      "answer": "Email: support@kakunin.ai. Documentation: https://kakunin.ai/docs. For press/partnership inquiries: press@kakunin.ai. For security issues: abuse@kakunin.ai."
+    }
+  ]
+}

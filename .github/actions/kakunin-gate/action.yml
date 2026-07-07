@@ -1,0 +1,83 @@
+name: 'Kakunin Cert Gate'
+description: "Gate a deployment on an AI agent's behavioral risk score (Kakunin)."
+author: 'Kakunin'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  api-key:
+    description: 'Kakunin API key (store as a GitHub Actions secret).'
+    required: true
+  agent-id:
+    description: 'UUID of the agent to gate the deploy on.'
+    required: true
+  api-url:
+    description: 'Kakunin API base URL.'
+    required: false
+    default: 'https://kakunin.ai'
+  window-days:
+    description: 'How many days of behavioral history to evaluate (1-30).'
+    required: false
+    default: '7'
+  fail-on-action-required:
+    description: "Fail the job on an 'action_required' verdict (0.75-0.85), not just 'fail'."
+    required: false
+    default: 'false'
+
+outputs:
+  decision:
+    description: "pass | action_required | fail"
+    value: ${{ steps.gate.outputs.decision }}
+  risk-score:
+    description: 'Peak risk score considered.'
+    value: ${{ steps.gate.outputs.risk_score }}
+  cert-revoked:
+    description: "true if the agent's certificate was revoked by this gate."
+    value: ${{ steps.gate.outputs.cert_revoked }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: gate
+      shell: bash
+      env:
+        KAKUNIN_API_KEY: ${{ inputs.api-key }}
+        AGENT_ID: ${{ inputs.agent-id }}
+        API_URL: ${{ inputs.api-url }}
+        WINDOW_DAYS: ${{ inputs.window-days }}
+        FAIL_ON_AR: ${{ inputs.fail-on-action-required }}
+      run: |
+        set -euo pipefail
+        payload=$(jq -nc \
+          --arg a "$AGENT_ID" --arg s "${GITHUB_SHA:-}" --arg r "${GITHUB_RUN_ID:-}" \
+          --arg repo "${GITHUB_REPOSITORY:-}" --argjson w "${WINDOW_DAYS}" \
+          '{agentId:$a, commitSha:$s, workflowRunId:$r, repo:$repo, windowDays:$w}')
+
+        resp=$(curl -sS -X POST "${API_URL%/}/api/v1/integrations/github/gate" \
+          -H "Authorization: Bearer ${KAKUNIN_API_KEY}" \
+          -H "content-type: application/json" \
+          -d "$payload")
+
+        decision=$(echo "$resp" | jq -r '.data.decision // "error"')
+        score=$(echo "$resp" | jq -r '.data.risk_score // "null"')
+        revoked=$(echo "$resp" | jq -r '.data.cert_revoked // false')
+
+        echo "decision=$decision"   >> "$GITHUB_OUTPUT"
+        echo "risk_score=$score"    >> "$GITHUB_OUTPUT"
+        echo "cert_revoked=$revoked">> "$GITHUB_OUTPUT"
+
+        case "$decision" in
+          pass)
+            echo "::notice title=Kakunin Gate::PASS — agent risk $score below threshold." ;;
+          action_required)
+            echo "::warning title=Kakunin Gate::ACTION REQUIRED — agent risk $score (0.75-0.85)."
+            if [ "$FAIL_ON_AR" = "true" ]; then
+              echo "::error::Failing because fail-on-action-required=true."; exit 1
+            fi ;;
+          fail)
+            echo "::error title=Kakunin Gate::FAIL — agent risk $score ≥ 0.85; cert_revoked=$revoked. Blocking deploy."
+            exit 1 ;;
+          *)
+            echo "::error title=Kakunin Gate::Unexpected response: $resp"; exit 1 ;;
+        esac

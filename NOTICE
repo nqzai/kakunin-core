@@ -1,0 +1,37 @@
+Kakunin — AI Agent Compliance Platform
+Copyright (C) 2026 Immortal Reality PA LLC
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+--------------------------------------------------------------------------------
+Third-party components and license elections
+--------------------------------------------------------------------------------
+
+Several dependencies are dual-licensed; this project elects the permissive
+option in each case:
+
+  - node-forge      used under BSD-3-Clause   (dual: BSD-3-Clause OR GPL-2.0)
+  - dompurify       used under Apache-2.0      (dual: MPL-2.0 OR Apache-2.0)
+
+Weak-copyleft build/dev dependencies (MPL-2.0: lightningcss, axe-core,
+@vercel/stega; LGPL-3.0: the libvips binary used by sharp) are used as
+unmodified libraries and do not affect the licensing of this program.
+
+All other dependencies retain their own licenses (predominantly MIT, Apache-2.0,
+ISC, and BSD variants). See the dependency manifest and node_modules for details.
+
+--------------------------------------------------------------------------------
+Trademarks
+--------------------------------------------------------------------------------
+
+"Kakunin" and the Kakunin logo are trademarks of Immortal Reality PA LLC and are
+NOT licensed under the AGPL. The AGPL grants you rights to the software, not to
+the marks. You may run and modify this software, but you may not use the Kakunin
+name or logo to imply endorsement or to offer a service under the Kakunin brand.

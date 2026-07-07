@@ -1,0 +1,339 @@
+export const metadata = {
+  title: "KYC for AI Agents — Identity, Risk & Continuous Monitoring",
+  description: "Learn how Know Your Customer principles translate to AI agents: identity verification, behavioral profiling, risk scoring, and continuous compliance for regulated deployments.",
+};
+
+# KYC for AI Agents
+
+Know Your Customer (KYC) is the foundation of financial regulation. Banks verify who their customers are, understand their business, and monitor for suspicious activity — continuously, not just at onboarding.
+
+Autonomous AI agents are now performing the same functions as financial counterparties: executing trades, processing payments, managing accounts, submitting regulatory filings. The question regulators are asking is: *how do you Know Your Agent?*
+
+This guide explains how KYC principles translate to AI agent governance — what "identity", "due diligence", and "ongoing monitoring" mean when the counterparty is autonomous software.
+
+---
+
+## Why KYC for Agents?
+
+Traditional KYC was designed for humans. You collect identity documents, verify them, assess risk, and continue monitoring. The process works because:
+
+1. A human identity is stable over time
+2. Humans have legal accountability
+3. Unusual behaviour can be investigated by asking the human
+
+Agents change all three assumptions:
+
+- **Identity is not stable**: container images are rebuilt, models are updated, configurations change — without this being reflected in a durable identity credential
+- **Accountability is distributed**: the agent, the model provider, the orchestration framework, and the deploying organisation all share responsibility
+- **Unusual behaviour cannot be investigated by asking**: you must detect deviations programmatically and respond automatically
+
+Kakunin's approach: give each agent a cryptographic identity (X.509 certificate), establish a behavioural baseline during onboarding, and continuously monitor against that baseline — exactly as traditional KYC monitors customers after onboarding.
+
+---
+
+## The Four Pillars
+
+### 1. Customer Identification → Agent Registration
+
+Traditional KYC: collect legal name, date of birth, address, government ID.
+
+Agent equivalent:
+
+```typescript
+const agent = await kakunin.agents.create({
+  name: 'trading-bot-eu-v3',         // unique, human-readable name
+  metadata: {
+    version: '3.1.0',                 // software version
+    model: 'gpt-4o',                  // LLM provider + model
+    framework: 'langchain@0.2.1',     // orchestration framework
+    deployment: 'kubernetes',          // runtime environment
+    operator: 'Acme Capital Ltd',      // legal entity operating the agent
+    regulated_entity: true,            // is the operator a regulated firm?
+    purpose: 'algorithmic_fx_trading', // what is this agent for?
+  },
+});
+```
+
+This creates a permanent record in Kakunin's registry. The agent's identity is tied to a cryptographic certificate, not a string name that can be spoofed.
+
+### 2. Customer Due Diligence → Agent Risk Assessment
+
+Traditional KYC: assess the customer's business type, expected transaction volume, source of funds, and PEP/sanctions status.
+
+Agent equivalent — before issuing a certificate, Kakunin assesses:
+
+| KYC Factor | Agent Equivalent | How Assessed |
+|---|---|---|
+| Business type | Agent purpose (trading, payments, data analysis) | Declared at registration; verified by scope |
+| Transaction volume | Expected event frequency and size | Declared limits; enforced in certificate scope |
+| Source of funds | Authority granted by operator's system | Operator tenant verification |
+| PEP/sanctions | Operator entity compliance status | Tenant-level compliance check |
+| Risk appetite | Anomaly threshold configuration | Set during agent setup |
+
+Higher-risk agent types (high-frequency trading, cross-border payments) require tighter scope limits and lower anomaly thresholds.
+
+### 3. Enhanced Due Diligence → High-Risk Agent Controls
+
+Just as high-risk KYC customers receive enhanced scrutiny, high-authority agents require enhanced controls:
+
+```typescript
+// Standard agent — lower authority. Scope is set at creation and encoded in the
+// certificate; certify() issues it.
+const standard = await kakunin.agents.create({
+  name: 'reporting-agent',
+  model_hash: 'sha256:...',
+  model: 'reporting-agent',
+  version: '1.0.0',
+  permitted_actions: ['read', 'report'],
+  financial_scope: { max_single_trade_usd: 1000 },
+});
+const standardCert = await kakunin.agents.certify(standard.id);
+
+// High-authority agent — tighter financial scope. Enforce human-in-the-loop for
+// large or out-of-hours trades in your own gateway; the certificate carries the
+// hard limits that verification checks.
+const hfTrading = await kakunin.agents.create({
+  name: 'hf-trading-agent',
+  model_hash: 'sha256:...',
+  model: 'hf-trading-agent',
+  version: '1.0.0',
+  permitted_actions: ['trade.execute'],
+  financial_scope: {
+    max_single_trade_usd: 500000,
+    permitted_instruments: ['EUR_USD', 'GBP_EUR', 'EUR_CHF'],
+    permitted_venues: ['bank_a', 'bank_b', 'ecb_repo'],
+  },
+});
+const hfCert = await kakunin.agents.certify(hfTrading.id);
+```
+
+### 4. Ongoing Monitoring → Continuous Behavioural Surveillance
+
+Traditional KYC: transaction monitoring, alert generation, periodic review.
+
+Agent equivalent:
+
+```typescript
+// Every agent action is evaluated against its behavioural baseline
+const behaviorEvent = await kakunin.events.ingest({
+  agentId,
+  actionType: 'transaction_initiated',
+  details: {
+    market: 'EUR_USD',
+    size: 45000,
+    direction: 'buy',
+    counterparty: 'bank_a',
+    execution_time_ms: 234,
+  },
+});
+
+// Kakunin returns the risk score + band for this event
+const { risk_score, risk_band } = behaviorEvent;
+
+if (risk_band === 'high') {
+  // Pre-revocation warning already sent via webhook
+  // On-call paged
+  // Action logged at verbose level
+}
+```
+
+The monitoring loop is continuous — not periodic as in traditional KYC refresh cycles. An agent operating 24/7 generates hundreds of events per day, each scored against the established baseline.
+
+---
+
+## Agent Onboarding Workflow
+
+Mapping traditional KYC customer onboarding to agent deployment:
+
+### Step 1: Identity Establishment (Day 0)
+
+```bash
+# CLI equivalent of collecting KYC documents
+kakunin agents create \
+  --name trading-bot-eu-v3 \
+  --purpose algorithmic_fx_trading \
+  --operator "Acme Capital Ltd" \
+  --regulated-entity
+```
+
+Generates:
+- Unique agent ID (`a_xyz123`)
+- Initial risk profile (based on purpose + operator)
+- Pending certificate (not yet issued)
+
+### Step 2: Scope Definition (Day 0)
+
+Equivalent to KYC risk assessment → set transaction limits:
+
+```typescript
+const scopePolicy = {
+  maxTransactionSize: 100000,     // EUR
+  maxDailyVolume: 5000000,        // EUR
+  allowedMarkets: ['EUR_USD', 'GBP_EUR'],
+  allowedHours: { start: '07:00', end: '18:00', tz: 'UTC' },
+  allowedRegions: ['eu-west-1'],
+  counterpartyWhitelist: ['bank_a', 'bank_b'],
+};
+
+// scopePolicy is applied when the agent is created (as financial_scope /
+// permitted_actions); certify() then issues the certificate with those limits.
+const cert = await kakunin.agents.certify(agentId);
+```
+
+The scope is embedded in the X.509 certificate as a custom extension — it cannot be modified without re-issuance from Kakunin's CA.
+
+### Step 3: Baseline Observation (Days 1–14)
+
+Equivalent to KYC onboarding period — observe behaviour before applying full controls:
+
+```typescript
+// There is no separate "observe mode" — the baseline forms automatically as you
+// ingest events. Run the agent (use a kak_test_ sandbox key for pre-production)
+// and stream its actions, then review the derived profile:
+const risk = await kakunin.agents.getRisk(agentId);
+console.log(risk.dominant_band, risk.drift.drift_score);
+```
+
+### Step 4: Baseline Approval (Day 14)
+
+Equivalent to KYC compliance officer review:
+
+```typescript
+// The baseline is maintained by Kakunin — nothing to derive or lock. A
+// compliance officer instead reviews the live profile and either lets the agent
+// proceed or revokes its certificate.
+const risk = await kakunin.agents.getRisk(agentId);
+if (risk.dominant_band !== 'high') {
+  console.log('Profile within tolerance — cleared for production');
+}
+```
+
+### Step 5: Ongoing Monitoring (Day 15+)
+
+Full anomaly detection active. Any deviation from approved baseline generates an alert.
+
+---
+
+## Risk-Based Approach
+
+Kakunin uses a risk-based approach — identical to the risk-based approach mandated for KYC by FATF and EU AML directives — to calibrate control intensity:
+
+### Agent Risk Categories
+
+**Category A — Low Risk**
+- Purpose: read-only data analysis
+- No financial transactions
+- No external API calls with side effects
+- Controls: standard certificate validity (365 days), anomaly threshold 0.80
+
+**Category B — Medium Risk**
+- Purpose: automated reporting, data submission, internal process automation
+- Limited financial authority (< €10,000 per transaction)
+- Controls: certificate validity 180 days, anomaly threshold 0.75
+
+**Category C — High Risk**
+- Purpose: algorithmic trading, payment processing, cross-border transfers
+- Significant financial authority (> €10,000 per transaction)
+- Controls: certificate validity 90 days, anomaly threshold 0.65, human-in-loop for high-value actions
+
+**Category D — Critical Risk**
+- Purpose: autonomous decision-making for large financial operations
+- Authority > €100,000 per transaction
+- Controls: certificate validity 30 days, anomaly threshold 0.55, mandatory human approval above a threshold, enhanced audit logging
+
+---
+
+## Ongoing KYC Refresh → Certificate Renewal
+
+Traditional KYC: periodic refresh (annual, or triggered by risk events).
+
+Agent equivalent — certificate renewal with re-assessment:
+
+```typescript
+// 30 days before certificate expiry, Kakunin sends renewal reminder webhook
+// Renewal requires fresh assessment — not automatic rollover
+
+const renewalAssessment = await kakunin.certificates.startRenewal(agentId, {
+  // Review if scope is still appropriate
+  reviewScope: true,
+  // Pull 12-month behaviour history for baseline re-calibration
+  recalibrateBaseline: true,
+  // Check if operator's regulated status has changed
+  refreshOperatorRisk: true,
+});
+
+if (renewalAssessment.scopeChangeRequired) {
+  // Compliance officer must approve new scope
+  await notifyComplianceTeam(renewalAssessment);
+}
+
+// Issue renewed certificate (may have updated scope)
+const newCert = await kakunin.certificates.renew(agentId, renewalAssessment.id);
+```
+
+## KYC Compliance for Financial Transactions on Behalf of Users
+
+When AI agents perform financial transactions on behalf of users, regulators require strict adherence to delegation frameworks and liability mappings:
+
+1. **Delegation Chain & Traceability (RFC 8693):** Every transaction must show a clear cryptographic delegation chain. The user (delegator) authorizes the agent (delegatee), which is verified at runtime via OAuth 2.0 Token Exchange claims (`act` claim).
+2. **Strict Scope Boundaries:** The agent's transaction limits must be hardcoded within the certificate scope, preventing the agent from executing transactions beyond the user's explicit consent limits, regardless of model generation outputs.
+3. **Liability & Non-Repudiation:** Operating firms must prove the exact state of the agent's instructions, model hash, and context window at the time of execution. The WORM log ensures that subsequent software updates do not alter past transaction reasoning records.
+
+---
+
+## Intermediary Customer Onboarding Expectations
+
+When AI agents act as intermediaries to onboard human customers (e.g., executing identity verification, scanning documents, or evaluating credit risk), regulators enforce distinct compliance criteria:
+
+- **Bias and Fairness Testing:** The agent's reasoning path must be continuously monitored to ensure non-discriminatory outcomes in account-opening decisions.
+- **Traceable Decision Auditing:** If an onboarding agent rejects a user, the specific criteria (OCR mismatch, facial similarity failure, risk scoring) must be logged with a timestamp and intermediate reasoning steps.
+- **Mandatory Human Intervention (Article 14 override):** High-risk onboarding decisions must trigger human-in-the-loop validation if flagged as ambiguous, ensuring automated systems do not permanently lock out legitimate users without recourse.
+
+---
+
+## Regulatory Evidence Package
+
+At any point, Kakunin can produce a KYC-equivalent evidence package for an agent:
+
+```typescript
+const evidencePackage = await kakunin.compliance.getEvidencePackage(agentId);
+
+// Contains:
+// - Agent registration record (who created it, when, for what purpose)
+// - Certificate history (all certs issued, their scope, validity periods)
+// - Scope justification (what limits were set and why)
+// - Baseline approval records (who approved, when, what baseline)
+// - Full audit log (WORM — every action, signed, with risk scores)
+// - Anomaly history (all alerts generated, resolutions, times)
+// - Revocation events (if any, with reasons and post-incident reports)
+```
+
+This package satisfies:
+- **EU AI Act Article 11** — technical documentation
+- **EU AI Act Article 12** — automatic logging
+- **MiCA Article 71** — record-keeping for CASP algorithmic trading
+- **AML Directive** — customer due diligence records for agent-executed transactions
+
+---
+
+## Differences from Traditional KYC
+
+| Dimension | Traditional KYC | KYC for Agents |
+|---|---|---|
+| Identity document | Passport, company registration | X.509 certificate (cryptographic) |
+| Identity verification | Manual review | Cryptographic signature verification |
+| Due diligence timing | Onboarding + periodic refresh | Continuous; every action |
+| Alert threshold | Rule-based (transaction amount, geography) | ML-based anomaly score against behavioural baseline |
+| Response to alert | Human review, possible account freeze | Automatic certificate revocation; agent halts |
+| Audit trail | Transaction records | WORM append-only log with cryptographic proof |
+| Refresh cycle | Annual or event-triggered | Certificate expiry (30–365 days) |
+| Revocation | Manual account suspension | Automatic; propagated in real-time via OCSP |
+
+---
+
+## What's Next?
+
+- **[Know Your Agent (KYA) Framework](/docs/know-your-agent)** — detailed KYA implementation guide
+- **[Agent Security Guide](/docs/agent-security)** — threat model and defensive architecture
+- **[MiCA Trading Bot Guide](/docs/mica-trading-bots)** — specific MiCA requirements for algorithmic trading
+- **[Dashboard](/dashboard)** — register your first agent

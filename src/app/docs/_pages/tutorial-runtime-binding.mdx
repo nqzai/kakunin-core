@@ -1,0 +1,404 @@
+export const metadata = {
+  title: "Tutorial: Implement Secure Runtime Binding for Your Agent",
+  description: "Step-by-step guide to integrate Kakunin runtime binding into your LLM agent. Code examples in TypeScript and Python.",
+};
+
+# Tutorial: Implement Secure Runtime Binding for Your Agent
+
+This tutorial walks you through integrating Kakunin runtime binding into an existing agent. By the end, every action your agent takes will be cryptographically signed and scope-enforced.
+
+---
+
+## Prerequisites
+
+- Node.js 18+ or Python 3.10+
+- Kakunin account + API key (get one [here](/dashboard))
+- Basic understanding of async/await and HTTP requests
+
+---
+
+## Step 1: Install Kakunin SDK
+
+### TypeScript/Node.js
+
+```bash
+npm install @kakunin/sdk
+```
+
+### Python
+
+```bash
+pip install kakunin
+```
+
+---
+
+## Step 2: Initialize Kakunin Client
+
+### TypeScript
+
+```typescript
+import { Kakunin } from '@kakunin/sdk';
+
+const kakunin = new Kakunin({
+  apiKey: process.env.KAKUNIN_API_KEY,
+  baseUrl: 'https://api.kakunin.ai',
+});
+```
+
+### Python
+
+```python
+from kakunin import Kakunin
+
+kakunin = Kakunin(
+    api_key=os.getenv('KAKUNIN_API_KEY'),
+    base_url='https://api.kakunin.ai'
+)
+```
+
+---
+
+## Step 3: Bind Agent Identity at Startup
+
+Create or retrieve an agent and bind it to your process.
+
+### TypeScript
+
+```typescript
+async function setupAgent() {
+  // Option 1: Create a new agent with its scope baked into the certificate
+  const agent = await kakunin.agents.create({
+    name: 'my_trading_bot',
+    model: 'my_trading_bot',
+    version: 'v1.0.0',
+    model_hash: 'sha256:...',   // SHA-256 of your model weights/config
+    financial_scope: {
+      max_single_trade_usd: 50000,
+      permitted_instruments: ['EUR_USD', 'GBP_USD'],
+    },
+  });
+
+  // Option 2: Retrieve existing agent
+  // const agent = await kakunin.agents.get('agt_...');
+
+  // Issue the certificate (365-day validity, KMS-backed)
+  const cert = await kakunin.agents.certify(agent.id);
+
+  // Store the public identity — the private key stays in KMS.
+  return {
+    agentId: agent.id,
+    certificatePem: cert.certificate_pem,
+    serialNumber: cert.serial_number,
+  };
+}
+
+const identity = await setupAgent();
+console.log(`Agent bound: ${identity.agentId}`);
+```
+
+### Python
+
+```python
+async def setup_agent():
+    # Create or retrieve agent
+    agent = await kakunin.agents.create(
+        name='my_trading_bot',
+        model='my_trading_bot',
+        version='v1.0.0',
+        model_hash='sha256:...',   # SHA-256 of your model weights/config
+        financial_scope={
+            'max_single_trade_usd': 50000,
+            'permitted_instruments': ['EUR_USD', 'GBP_USD'],
+        },
+    )
+
+    # Issue the certificate (365-day validity, KMS-backed)
+    cert = await kakunin.agents.certify(agent.id)
+
+    return {
+        'agent_id': agent.id,
+        'certificate_pem': cert.certificate_pem,
+        'serial_number': cert.serial_number,
+    }
+
+identity = await setup_agent()
+```
+
+---
+
+## Step 4: Sign Actions Before Execution
+
+Before your agent executes any significant action (trade, write data, etc.), sign it:
+
+### TypeScript
+
+```typescript
+async function executeTrade(tradeRequest: {
+  market: string;
+  side: 'BUY' | 'SELL';
+  size: number;
+}) {
+  // 1. Serialize request deterministically
+  const payload = JSON.stringify(tradeRequest, 
+    Object.keys(tradeRequest).sort()
+  );
+  
+  // 2. Sign with the agent's KMS-backed key via the sign endpoint
+  const signRes = await fetch(
+    `https://api.kakunin.ai/v1/agents/${identity.agentId}/sign`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ payload: tradeRequest }),
+    },
+  );
+  const signedAction = await signRes.json();
+
+  console.log(`Action signed: ${signedAction.signature.substring(0, 20)}...`);
+  
+  // 3. Submit to exchange with proof
+  const response = await fetch('https://api.exchange.com/v1/trades', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Agent-Certificate': identity.certificatePem,
+      'X-Agent-Signature': signedAction.signature,
+      'Authorization': `Bearer ${process.env.EXCHANGE_API_KEY}`,
+    },
+    body: payload,
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Trade failed: ${await response.text()}`);
+  }
+  
+  return response.json();
+}
+
+// Execute trade
+const trade = {
+  market: 'EUR_USD',
+  side: 'BUY',
+  size: 45000,
+};
+
+const result = await executeTrade(trade);
+console.log(`Trade executed: ${result.orderId}`);
+```
+
+### Python
+
+```python
+async def execute_trade(trade_request: dict):
+    # Serialize deterministically
+    payload = json.dumps(trade_request, sort_keys=True)
+    
+    # Sign with the agent's KMS-backed key
+    signed_action = await kakunin.agents.sign(
+        identity['agent_id'], payload=trade_request,
+    )
+    
+    # Submit with proof
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            'https://api.exchange.com/v1/trades',
+            headers={
+                'X-Agent-Certificate': identity['certificate_pem'],
+                'X-Agent-Signature': signed_action.signature,
+            },
+            data=payload,
+        ) as response:
+            if response.status != 200:
+                raise Exception(f"Trade failed: {await response.text()}")
+            return await response.json()
+
+trade = {
+    'market': 'EUR_USD',
+    'side': 'BUY',
+    'size': 45000,
+}
+
+result = await execute_trade(trade)
+```
+
+---
+
+## Step 5: Handle Revocation
+
+Your agent should check revocation status periodically. Kakunin handles this automatically if you use the signing service, but you can also check manually:
+
+### TypeScript
+
+```typescript
+async function checkRevocationStatus(): Promise<boolean> {
+  const cert = await kakunin.verify.cert(identity.serialNumber);
+
+  if (cert.status !== 'active') {
+    console.error(`Agent not active: ${cert.status}`);
+    process.exit(1); // Stop execution immediately
+  }
+
+  return cert.status === 'active';
+}
+
+// Check on startup
+await checkRevocationStatus();
+
+// Check periodically (e.g., every 5 minutes)
+setInterval(checkRevocationStatus, 5 * 60 * 1000);
+```
+
+### Python
+
+```python
+async def check_revocation_status() -> bool:
+    result = await kakunin.verify.certificate(identity['serial_number'])
+
+    if result['status'] != 'active':
+        logger.error(f"Agent not active: {result['status']}")
+        sys.exit(1)
+
+    return result['status'] == 'active'
+
+await check_revocation_status()
+asyncio.create_task(periodic_check(check_revocation_status, 5 * 60))
+```
+
+---
+
+## Step 6: Monitor and Log
+
+Log all actions with their signatures for audit trails:
+
+### TypeScript
+
+```typescript
+async function logAction(
+  action: string,
+  request: any,
+  signature: string,
+  result: any
+) {
+  const auditEntry = {
+    timestamp: new Date().toISOString(),
+    agent_id: identity.agentId,
+    agent_cert_serial: identity.serialNumber,
+    action_type: action,
+    request_payload: request,
+    signature: signature.substring(0, 50) + '...',
+    result_status: result.status || 'success',
+  };
+  
+  // Log to stdout (structured for Datadog/Better Stack)
+  console.log(JSON.stringify(auditEntry));
+  
+  // Optional: Send to compliance audit system
+  await complianceAuditLog.insert(auditEntry);
+}
+```
+
+---
+
+## Step 7: Test Integration
+
+Test locally before deploying:
+
+### TypeScript
+
+```typescript
+async function testIntegration() {
+  // 1. Setup
+  const identity = await setupAgent();
+  console.log('✓ Agent identity bound');
+  
+  // 2. Sign action
+  const testPayload = { test: true };
+  const signRes = await fetch(
+    `https://api.kakunin.ai/v1/agents/${identity.agentId}/sign`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ payload: testPayload }),
+    },
+  );
+  const signed = await signRes.json();
+  console.log('✓ Action signed');
+  
+  // 3. Check revocation
+  const notRevoked = await checkRevocationStatus();
+  console.log(`✓ Revocation check passed: ${notRevoked}`);
+  
+  // 4. Test with mock exchange
+  const mockResponse = await testMockExchange(
+    testPayload,
+    identity.certificatePem,
+    signed.signature
+  );
+  console.log(`✓ Mock exchange accepted signature: ${mockResponse.ok}`);
+  
+  console.log('\n✅ Runtime binding integration successful');
+}
+
+await testIntegration();
+```
+
+---
+
+## Environment Variables
+
+Create `.env`:
+
+```bash
+# Kakunin API
+KAKUNIN_API_KEY=kak_live_xxxxxxxxxxxxxxxx
+
+# Exchange API (if needed)
+EXCHANGE_API_KEY=your_exchange_api_key
+
+# Logging
+LOG_LEVEL=info
+AUDIT_LOG_ENDPOINT=https://audit.yourcompany.com/api/log
+```
+
+---
+
+## What's Next?
+
+Now that your agent is cryptographically bound:
+
+1. **Monitor behavior:** Set up alerts in Kakunin dashboard for anomalies
+2. **Test scope enforcement:** Verify agent refuses out-of-scope requests
+3. **Deploy to production:** Follow [deployment best practices](/docs/runtime-binding#production-deployment)
+4. **Generate compliance reports:** Use Kakunin to export audit trails for regulators
+
+---
+
+## Troubleshooting
+
+### "Certificate not found"
+- Check agent ID is correct
+- Ensure certificate hasn't expired: `identity.certificatePem`
+
+### "Signature verification failed"
+- Verify payload is serialized deterministically (use `JSON.stringify` with sorted keys)
+- Check certificate chain is complete in request headers
+
+### "KMS access denied"
+- Verify AWS KMS permissions on the key ARN
+- Check `KAKUNIN_API_KEY` is valid and not expired
+
+---
+
+## Resources
+
+- [Kakunin SDK API Reference](https://docs.kakunin.ai/sdk)
+- [Secure Runtime Binding Deep Dive](/docs/runtime-binding)
+- [API Authentication](/docs/authentication)
+- [Support Discord](https://discord.gg/FGR4Z4Rxh)

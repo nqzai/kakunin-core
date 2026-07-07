@@ -1,0 +1,354 @@
+export const metadata = {
+  title: "AI Agent Identity: Cryptographic Verification & Compliance",
+  description: "Comprehensive guide to cryptographic identity for AI agents. Learn how X.509 certificates enable non-repudiation, audit trails, and regulatory compliance for autonomous systems.",
+};
+
+# AI Agent Identity: Cryptographic Verification & Compliance
+
+## What is AI Agent Identity?
+
+AI agent identity is the cryptographic proof of *who* an autonomous system is, *what* it can do, and *when* it acted. Unlike human identity (passport, driver's license), agent identity is rooted in **public key cryptography**—specifically X.509 digital certificates issued and managed by trusted certificate authorities.
+
+In regulated environments like fintech, trading, and EU jurisdictions, agent identity serves a critical function: it creates an **immutable audit trail** proving that a specific agent—not a human, not a generic service account—performed a transaction.
+
+### Core Components
+
+**1. X.509 Certificate**
+Digital credential issued by a trusted CA (Certificate Authority) containing:
+- Agent's public key
+- Agent metadata (name, issuer, valid dates)
+- Serial number (unique identifier)
+- Digital signature (proves CA authenticity)
+
+**2. Private Key (in KMS)**
+Cryptographic secret stored in Hardware Security Module (HSM) or AWS KMS—never exposed to application code.
+
+**3. Digital Signature**
+Cryptographic proof that an agent authorized an action. Created by signing transaction data with the private key.
+
+**4. Audit Log (WORM)**
+Write-Once-Read-Many append-only log proving when the agent acted, what it did, and what the outcome was.
+
+### Real-World Example
+
+An AI trading bot operating under MiCA regulations:
+- **Identity:** X.509 cert issued to `ai_trader_bot_v2.kakunin.ai`
+- **Scope:** Authorized to trade EUR/USD pairs up to €50k per transaction
+- **Action:** Executes a €25k trade at 14:33 UTC
+- **Proof:** Trade signed with bot's private key + logged to immutable audit trail
+- **Verification:** Regulators can cryptographically verify bot performed the trade (not a human, not a different system)
+
+---
+
+## Why Agents Need Cryptographic Identity
+
+### 1. Regulatory Mandate: Non-Repudiation
+
+**EU AI Act (Article 12):** High-risk AI systems must maintain "logging of the operation" and "human oversight." Cryptographic identity is the only way to prove an agent—not a human—made a decision.
+
+**MiCA (Articles 67–75):** Crypto exchanges must ensure "operational resilience" and "segregation of duties." Agent identity enables automated enforcement: the system can prove which agent executed which trade and when.
+
+**GDPR (Article 22):** Individuals have rights regarding "automated decision-making." Agent identity creates defensible audit trails proving the algorithm's logic.
+
+Without cryptographic identity:
+- ❌ Auditors can't prove which system executed a trade
+- ❌ Regulators can't distinguish agent actions from human actions
+- ❌ Companies can't enforce scope controls (e.g., "bot can trade up to $50k")
+- ❌ Legal liability falls on the company, not the agent
+
+### 2. Operational Safety: Automated Revocation
+
+An AI agent starts behaving abnormally. With cryptographic identity:
+- **Real-time risk scoring** detects anomaly (e.g., 10x normal transaction size)
+- **Automated revocation** invalidates the agent's certificate
+- **All downstream systems** immediately reject the agent's signatures
+- **No human latency:** Revocation happens in milliseconds, not minutes
+
+Without identity:
+- ❌ System administrator must manually revoke API keys
+- ❌ Some services may not yet know the key is revoked
+- ❌ Bot continues trading for seconds/minutes during handoff
+- ❌ Potential for massive losses
+
+### 3. Developer Trust: Scope Isolation
+
+In large microservices architectures, multiple agents operate simultaneously. Cryptographic identity enables **scope enforcement**:
+
+```
+Agent A (data processor):
+  ✅ Read: /data/raw/*
+  ✅ Write: /data/processed/*
+  ❌ Access: /secrets/keys/
+
+Agent B (reporting bot):
+  ✅ Read: /data/processed/*
+  ✅ Write: /reports/*
+  ❌ Access: /data/raw/*
+```
+
+Each agent's certificate contains a **scope policy**. System enforces: "Agent B's key is valid, but Agent B's scope doesn't include `/data/raw/`—reject."
+
+Without identity:
+- ❌ One compromised API key = full access to all resources
+- ❌ Lateral movement (agent A can access agent B's data)
+- ❌ Overprivileged service accounts
+
+---
+
+## X.509 Certificate Requirements for AI Agents
+
+### Certificate Structure
+
+An X.509 certificate for AI agents contains standard fields *plus* agent-specific extensions:
+
+```
+Certificate: {
+  Version: 3
+  Serial Number: f1d4e8c7b2a9f3e6
+  Signature Algorithm: sha256WithRSAEncryption
+  Issuer: Kakunin Root CA
+  Validity: {
+    Not Before: 2026-05-28
+    Not After: 2027-05-28  (365 days for MiCA compliance)
+  }
+  Subject: {
+    CommonName: ai_trading_bot_v2
+    Organization: Immortal Reality PA LLC
+  }
+  Subject Public Key Info: {
+    RSA 2048-bit key
+  }
+  Extensions: {
+    keyUsage: digitalSignature
+    extendedKeyUsage: clientAuth
+    subjectAltName: ai_trading_bot_v2.kakunin.ai
+    agentPolicy: {
+      max_single_trade_usd: 50000
+      permitted_instruments: [EUR_USD, GBP_USD]
+      revocationTimeout: 15s
+    }
+  }
+}
+```
+
+### Cryptographic Requirements
+
+| Requirement | Details | Reason |
+|---|---|---|
+| **Algorithm** | RSA 2048-bit minimum | Regulatory baseline for financial systems |
+| **Validity** | 365 days max | MiCA Art. 70 refresh cadence |
+| **Key Storage** | HSM/KMS only | Private keys never on disk |
+| **Signature Algorithm** | SHA-256 with RSA | NIST-approved, no collisions |
+| **Chain of Trust** | Root CA → Intermediate → Agent | Enables revocation at multiple levels |
+
+### Issuance Workflow
+
+1. **Agent Registration**
+   - System submits CSR (Certificate Signing Request)
+   - Request includes agent scope (max transaction size, allowed markets)
+   - Request signed with temporary key
+
+2. **CA Validation**
+   - CA verifies requesting system identity
+   - CA checks scope against regulatory limits
+   - CA signs the certificate with its private key
+
+3. **Installation**
+   - Certificate returned to system
+   - Corresponding private key generated in KMS
+   - Agent configured with cert + KMS ARN
+
+4. **Monitoring**
+   - System monitors agent behavior in real-time
+   - If risk score exceeds threshold, trigger revocation
+   - Revocation published to OCSP responders
+
+---
+
+## Kakunin Platform Integration
+
+Kakunin automates the entire agent identity lifecycle.
+
+### 1. Certificate Issuance (3 min setup)
+
+```bash
+curl -X POST https://api.kakunin.ai/v1/agents/certify \
+  -H "Authorization: Bearer sk_prod_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "trading_bot_v2",
+    "organization": "Acme Trading LLC",
+    "max_transaction_size_usd": 50000,
+    "allowed_markets": ["EUR_USD", "GBP_USD"],
+    "validity_days": 365
+  }'
+```
+
+Response:
+```json
+{
+  "certificate_pem": "-----BEGIN CERTIFICATE-----\n...",
+  "serial_number": "f1d4e8c7b2a9f3e6",
+  "expires_at": "2027-05-28T00:00:00Z",
+  "agent_id": "trading_bot_v2"
+}
+```
+
+Install the certificate in your application:
+
+```typescript
+// Kakunin signs with the agent's KMS-backed key via the sign endpoint —
+// you never hold key material.
+const res = await fetch(`https://api.kakunin.ai/v1/agents/${agentId}/sign`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ payload: tradeRequest }),
+});
+const { signature } = await res.json();
+
+// Submit with proof
+await exchange.submitTrade({
+  trade: tradeRequest,
+  agentCertificate: certificatePem,
+  signature,
+});
+```
+
+### 2. Real-Time Risk Monitoring
+
+Kakunin continuously monitors agent behavior:
+
+```typescript
+import { Kakunin } from '@kakunin/sdk';
+const kakunin = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+// Agent streams behavioral events; the call returns the risk score synchronously.
+const { risk_score, risk_band } = await kakunin.events.ingest({
+  agentId: 'agt_trading_bot_v2',
+  actionType: 'transaction_initiated',
+  details: { market: 'EUR_USD', size: 45000, direction: 'BUY' },
+});
+
+// A high band queues an automatic revocation check.
+```
+
+### 3. Automated Revocation
+
+When risk exceeds threshold:
+
+1. **Revocation event published**
+   ```
+   certificate revoked at 2026-06-01T14:33:45Z
+   reason: behavioral_anomaly (risk_score=0.87)
+   ```
+
+2. **OCSP responder updated**
+   - Within 5 seconds, OCSP returns "revoked"
+   - All downstream systems reject signatures from revoked cert
+
+3. **Audit logged**
+   ```sql
+   INSERT INTO audit_log VALUES (
+     event_type: 'certificate.revoked',
+     agent_id: 'trading_bot_v2',
+     reason: 'behavioral_anomaly',
+     risk_score: 0.87,
+     timestamp: '2026-06-01T14:33:45Z'
+   );
+   ```
+
+### 4. Compliance Reporting
+
+Export audit trails for regulators:
+
+```typescript
+const report = await kakunin.complianceReport({
+  agent_id: 'trading_bot_v2',
+  start_date: '2026-01-01',
+  end_date: '2026-06-01',
+  include: ['trades', 'risk_events', 'revocations'],
+});
+
+// PDF report ready for regulator submission
+```
+
+---
+
+## Regulatory Compliance Mapping
+
+### EU AI Act
+
+| Article | Requirement | Kakunin Solution |
+|---------|-------------|-----------------|
+| **Article 12** | "Logging of the operation of high-risk AI systems" | X.509 cert + immutable audit_log |
+| **Article 13** | "Appropriate human oversight" | Risk scores + automated alerts |
+| **Article 14** | "Record-keeping" | WORM audit trail, 7-year retention |
+| **Article 22** | Right to explanation (GDPR sync) | Behavioral event logs explain why agent was revoked |
+
+### MiCA
+
+| Article | Requirement | Kakunin Solution |
+|---------|-------------|-----------------|
+| **Article 67** | "Operational resilience" | Automated revocation on anomaly |
+| **Article 68** | "Key management" | KMS-only key storage, no material on disk |
+| **Article 70** | "Cert validity & renewal" | Auto-refresh every 365 days |
+| **Article 72** | "Incident reporting" | Event logging + incident classification |
+
+### GDPR
+
+| Article | Requirement | Kakunin Solution |
+|---------|-------------|-----------------|
+| **Article 22** | "Right not to be subject to purely automated decisions" | Audit trail proves whether human or agent acted |
+| **Article 32** | "Encryption & key management" | RSA 2048 + AWS KMS |
+| **Article 34** | "Breach notification" | Anomaly detection triggers incident response |
+
+---
+
+## Organizational Identity Verification Flow in Regulated Industries
+
+In regulated sectors, issuing a certificate requires an established corporate due diligence process before assigning cryptographic authority:
+
+1. **KYC / AML Corporate Alignment:** Validate that the agent operator's legal entity is in good standing and has undergone standard business KYC (Know Your Business).
+2. **Mandate Approval:** A designated Compliance Officer must sign off on the agent's scope (e.g. transaction caps, permitted trading pairs) prior to certificate generation.
+3. **Model Version Verification:** The exact Docker container image hash and the LLM release hash must be recorded in the registry to ensure no untraceable software changes alter the agent's behavior.
+4. **Key Custody Audit:** An IT security review must verify that private keys are generated inside AWS KMS or a Hardware Security Module (HSM) and that no human operators have access to the plaintext key material.
+
+---
+
+## Getting Started
+
+1. **Create your first agent**
+   ```bash
+   curl -X POST https://api.kakunin.ai/v1/agents \
+     -H "Authorization: Bearer $KAKUNIN_API_KEY" \
+     -d '{"name": "my_trading_bot"}'
+   ```
+
+2. **Issue X.509 certificate**
+   ```bash
+   curl -X POST https://api.kakunin.ai/v1/agents/{id}/certify \
+     -d '{"validity_days": 365}'
+   ```
+
+3. **Integrate with your system**
+   - Install the Kakunin SDK (Node.js or Python)
+   - Sign actions via the `/v1/agents/{id}/sign` endpoint (`agents.sign` in Python)
+   - Stream events with `kakunin.events.ingest()`
+
+4. **Monitor & maintain**
+   - View real-time risk scores in dashboard
+   - Export compliance reports quarterly
+   - Rotate certificates annually (auto-refresh available)
+
+---
+
+## Resources
+
+- [X.509 Certificate Spec (RFC 5280)](https://tools.ietf.org/html/rfc5280)
+- [EU AI Act Full Text](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)
+- [MiCA Article 67–75: Operational Resilience](https://eur-lex.europa.eu/eli/reg/2023/1114/oj)
+- [AWS KMS Best Practices](https://docs.aws.amazon.com/kms/latest/developerguide/best-practices.html)
+- [NIST Cryptographic Standards](https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/)

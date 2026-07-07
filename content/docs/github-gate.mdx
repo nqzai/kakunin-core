@@ -1,0 +1,91 @@
+---
+title: GitHub Actions Deploy Gate
+description: "Gate a deployment on your agent's behavioural risk. A GitHub Action asks Kakunin whether an agent is safe to ship — pass, action_required, or fail — and a hard fail revokes the cert and suspends the agent."
+---
+
+## Overview
+
+Risk shouldn't be something you check after you deploy. The GitHub Actions gate puts the agent's behavioural risk in your CI pipeline: a workflow calls Kakunin before promoting an agent, and Kakunin returns a decision. On a hard fail it doesn't just warn — it **revokes the agent's certificate and suspends the agent**, then ties the whole thing to the commit that triggered it.
+
+This is dev-native, self-serve **control** — no PKI program required.
+
+## Decisions and thresholds
+
+The gate scores the agent's peak behavioural risk over a recent window and returns one of three honest bands:
+
+| Decision | Peak risk | What happens |
+|---|---|---|
+| `pass` | `< 0.75` | Safe to deploy |
+| `action_required` | `0.75 – 0.85` | Review before deploy; your Action decides whether to block |
+| `fail` | `≥ 0.85` | Cert revoked, agent suspended, deploy should stop |
+
+## Calling the gate
+
+```bash
+POST /v1/integrations/github/gate
+```
+
+```json
+{
+  "agentId": "uuid",
+  "commitSha": "a1b2c3d4",
+  "workflowRunId": "1234567890",
+  "repo": "acme/trading-agents",
+  "windowDays": 7
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `agentId` | yes | The agent being gated (UUID) |
+| `commitSha` | no | Recorded to audit so the deploy is traceable |
+| `workflowRunId` | no | GitHub Actions run id, recorded to audit |
+| `repo` | no | `owner/name`, recorded to audit |
+| `windowDays` | no | Risk lookback window, 1–30 (default 7) |
+
+**Response `200`:**
+```json
+{
+  "data": {
+    "decision": "fail",
+    "risk_score": 0.91,
+    "band": "high",
+    "events_considered": 240,
+    "thresholds": { "action_required_at": 0.75, "fail_at": 0.85 },
+    "agent_id": "uuid",
+    "cert_serial": "c4f9-17a2",
+    "cert_revoked": true,
+    "agent_suspended": true,
+    "commit_sha": "a1b2c3d4",
+    "workflow_run_id": "1234567890"
+  }
+}
+```
+
+<Callout type="info">
+The endpoint **always returns HTTP 200** with a decision. Your workflow reads `data.decision` and chooses the exit code — Kakunin reports, the Action enforces.
+</Callout>
+
+## What a hard fail does
+
+On `decision: "fail"` (peak risk ≥ 0.85):
+
+1. **The agent is suspended.** Suspension is what actually stops the agent — the ingest path blocks suspended agents. This happens even if the agent has no active certificate (e.g. an expired one).
+2. **The active certificate is revoked**, if one exists, and the CRL is regenerated immediately so the revocation propagates fast.
+3. **An audit row is written** (`integration.github_gate_revoked`) recording the decision, risk score, commit SHA, workflow run id, and revoked serial.
+
+Even a `pass` or `action_required` check is audited (`integration.github_gate_checked`) — so every deploy is traceable to the exact risk posture that gated it.
+
+## Example workflow step
+
+```yaml
+- name: Kakunin agent gate
+  run: |
+    DECISION=$(curl -s -X POST https://api.kakunin.ai/v1/integrations/github/gate \
+      -H "Authorization: Bearer ${{ secrets.KAKUNIN_API_KEY }}" \
+      -H "content-type: application/json" \
+      -d '{"agentId":"'"$AGENT_ID"'","commitSha":"'"$GITHUB_SHA"'","workflowRunId":"'"$GITHUB_RUN_ID"'","repo":"'"$GITHUB_REPOSITORY"'"}' \
+      | jq -r '.data.decision')
+    echo "Gate decision: $DECISION"
+    [ "$DECISION" = "fail" ] && exit 1 || exit 0
+```

@@ -1,0 +1,53 @@
+---
+title: EU AI Act Agent Compliance & Audit Readiness Checklist
+description: A C-suite and engineering guide to achieving EU AI Act agent compliance, MiCA alignments, and DORA audit readiness.
+---
+
+When organizations delegate financial transaction authority, user communications, or database mutation operations to autonomous AI agent systems, they inherit regulatory liability. Traditional audit logs and static credentials fail to establish cryptographic proof of compliance.
+
+Use this checklist to audit your agentic architecture for compliance readiness.
+
+---
+
+## 1. Provenance & Identity Validation
+*Prove exactly what model version and configuration executed a transaction.*
+
+- [ ] **Model Weight Hashing**: Are your running model versions and parameter weights cryptographically hashed to verify that security configurations have not been modified or drifted?
+- [ ] **System Prompt Anchoring**: Is your agent's core system prompt signed with a cryptographic private key to prevent prompt injection at the hosting layer?
+- [ ] **X.509 Ephemeral Certificates**: Does each active agent possess a short-lived X.509 certificate generated from a hardware security module (HSM) or cloud KMS?
+- [ ] **Credential Isolation**: Are agent execution steps free from hardcoded API master keys or database credentials?
+
+**How Kakunin Helps:** Kakunin signs model weight hashes and prompt signatures directly into the agent's short-lived mTLS session certificates, providing cryptographic proof of identity.
+
+---
+
+## 2. Scoped Permissions & Tool Constraints
+*Restrict agents from executing arbitrary or unauthorized tool actions.*
+
+- [ ] **Dynamic Scope Boundaries**: Are agent permissions restricted to granular OAuth-like scopes (e.g., `invoice:read` but NOT `invoice:delete`)?
+- [ ] **Edge Verification**: Does your API Gateway inspect client-scoped certificates *before* allowing an agent request to hit your microservices?
+- [ ] **Database Row-Level Security**: Are database commands executed under session contexts bound to the agent's identity, preventing them from querying neighboring tenant data?
+
+**How Kakunin Helps:** The `@verify_agent_scope` decorator and native Edge plugins enforce programmatic boundary checks at the network border with under 5ms of validation latency.
+
+---
+
+## 3. Forensic Audit Trail & Non-Repudiation
+*Generate legally binding logs of agent reasoning and decisions.*
+
+- [ ] **Immutable WORM Storage**: Are agent prompts, intermediate reasoning steps (Chain-of-Thought), and outbound payloads written to Write-Once-Read-Many storage that even DB administrators cannot edit?
+- [ ] **Decision Signing**: Is every execution step cryptographically signed by the agent's session private key at the moment it occurs?
+- [ ] **Human-in-the-Loop Signatures**: Are human supervisor overrides and approvals digitally signed to prevent repudiation?
+
+**How Kakunin Helps:** Every transactional telemetry log is signed by a KMS key and streamed directly to secure WORM vaults, ensuring compliance with Article 12 of the EU AI Act.
+
+---
+
+## 4. Operational Resilience & Revocation
+*Prevent financial circuit blowouts and looping behaviors.*
+
+- [ ] **Real-time Behavior Scoring**: Does your platform evaluate prompt and output tokens dynamically to check for anomalous behaviors or loop drift?
+- [ ] **Instant Revocation (Kill-Switch)**: Can you revoke an individual agent's credentials globally in under 100ms via OCSP without taking your entire fleet offline?
+- [ ] **Spend Limits & Throttling**: Are token-count and dollar-value spend caps enforced programmatically on each agent session?
+
+**How Kakunin Helps:** The Kakunin Risk Engine monitors behavioral events and leverages high-performance CRLs and OCSP checks to auto-revoke compromised keys instantly.

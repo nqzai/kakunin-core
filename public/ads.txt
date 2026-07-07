@@ -1,0 +1,2 @@
+# No authorized advertising sellers declared yet.
+# Keep this file present so ad scanners do not flag a missing ads.txt.

@@ -1,0 +1,20 @@
+# Railway config for Discord bot service
+# Deploy this repo on Railway → set start command to: npm run bot:start
+# Env vars to set in Railway dashboard (copy from Doppler):
+#   DISCORD_BOT_TOKEN
+#   QSTASH_TOKEN
+#   QSTASH_URL
+#   NEXT_PUBLIC_APP_URL=https://kakunin.ai
+#   DISCORD_SUPPORT_ROLE_ID
+#   UPSTASH_REDIS_REST_URL
+#   UPSTASH_REDIS_REST_TOKEN
+
+[build]
+builder = "nixpacks"
+# Skip Next.js build — only need deps for the discord bot process
+buildCommand = "npm install --ignore-scripts && npm install tsx --save-dev"
+
+[deploy]
+startCommand = "npm run bot:start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

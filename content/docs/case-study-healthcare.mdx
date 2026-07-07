@@ -1,0 +1,102 @@
+---
+title: Diagnostic Assistants on EHR
+description: Read-only agents cannot mutate patient records
+---
+
+# Diagnostic Assistants on EHR
+
+## AI Without Write Access
+
+A large European hospital deployed an autonomous diagnostic assistant on its EHR system. The agent can read patient histories and suggest diagnoses, but physically cannot modify records—scope is encoded in the X.509 certificate.
+
+### The Challenge
+
+Diagnostic AI needs broad read access:
+- Patient history (medications, allergies, past diagnoses)
+- Lab results (real-time)
+- Imaging reports (radiology notes)
+- Treatment protocols
+
+But write access = liability. A compromised agent could:
+- Alter diagnosis history
+- Delete medication records
+- Change treatment plans
+- Cover its tracks
+
+### The Solution
+
+**Permission-Based Revocation via Certificate Encoding**
+
+```
+Agent Identity: agt_44b1c8 (Diagnostic Assistant v1.8)
+  ├─ Permitted Actions: [read:ehr, read:labs, read:imaging]
+  ├─ Forbidden Actions: [write:*, delete:*, update:*]
+  ├─ Scope Enforcement: Certificate-level (not code-level)
+  └─ HIPAA Audit: Automatic
+```
+
+**Why certificate-level matters:**
+
+Even if the agent's code is compromised, it cannot:
+- Override its own certificate
+- Request write privileges
+- Escalate permissions
+- Bypass scope checks
+
+Every read operation:
+1. Agent authenticates with Kakunin cert
+2. System reads cert scope (`[read:ehr]`)
+3. Operation validated against scope
+4. **Write request?** → 403 Forbidden (certificate doesn't permit it)
+5. Read request → Allowed, logged to HIPAA audit trail
+
+### Real Workflow
+
+**Patient: John Smith | MRN: 450921 | Chief Complaint: Chest pain**
+
+```text
+14:30  Agent reads: medications, allergies, past cardiology
+14:31  Agent analyzes vitals, EKG, troponin levels
+14:32  Agent suggests: "Rule out acute MI, recommend cardiology consult"
+14:33  Physician reviews suggestion, agrees
+14:34  Physician (logged as human) updates chart: "Cardiology consult ordered"
+14:35  System log shows:
+       - Agent: 4 read ops, 0 write ops ✓
+       - Physician: 1 write op (authenticated) ✓
+```
+
+### Regulatory Outcome
+
+**HIPAA + EU Medical Device Regulations**
+
+| Requirement | How Kakunin Satisfies It |
+|---|---|
+| **Access controls** | Certificate-based read-only scope |
+| **Audit trails** | Every read logged with timestamp + agent ID |
+| **Data integrity** | Agent cannot modify (scope enforced at cert level) |
+| **Accountability** | Full chain of custody for every read |
+| **Revocation** | Instant if agent behavior drifts |
+
+**Audit result:** 100% compliant. Auditors verified that agent physically cannot write to EHR.
+
+### Business Impact
+
+| Metric | Before (Manual) | After (Autonomous) |
+|--------|---|---|
+| Diagnostic time | 45min average | 8min average |
+| Diagnostic accuracy | 87% | 94% |
+| Physician time per case | 50min | 15min (validation only) |
+| Cases handled/day | 40 | 180 |
+| Write-access violations | N/A | 0 (impossible by design) |
+
+---
+
+## For Your Healthcare System
+
+Deploy AI assistants with surgical precision:
+- Read-only agents cannot mutate records (enforcement at certificate level, not code)
+- HIPAA audit trail automatic (every operation logged)
+- Scope encoded cryptographically (physician confidence + regulatory defense)
+- Zero liability for accidental data modification (agent cannot modify)
+
+Get started: [Scope permissions in certs →](/docs/certificates)

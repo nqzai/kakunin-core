@@ -1,0 +1,121 @@
+---
+title: Sandbox Environment
+description: Test agent integration without affecting production data using kak_test_ keys
+---
+
+# Sandbox Environment
+
+Kakunin sandbox is **key-based** — same API endpoint as production, `kak_test_...` key prefix flags requests as test. No separate domain required.
+
+## What is Sandbox?
+
+- **Same endpoint:** `https://www.kakunin.ai/api/v1` — no URL change needed
+- **Test keys:** `kak_test_...` prefix (created in dashboard, separate from `kak_live_...`)
+- **Automatic cleanup:** Test data older than 7 days auto-deleted nightly
+- **Free:** No metering, no costs for test key usage
+- **Isolated:** Test data never appears in production dashboards
+
+## Getting Started
+
+### 1. Generate Test Key
+
+Dashboard → **Developer** → **API Keys** → **Create test key**
+
+Copy the key immediately — shown once only. It will have a `kak_test_...` prefix.
+
+### 2. Use Test Key
+
+```bash
+export KAKUNIN_API_KEY=kak_test_...
+export KAKUNIN_BASE_URL=https://www.kakunin.ai/api/v1
+```
+
+```typescript
+import { Kakunin } from '@kakunin/sdk';
+
+const kakunin = new Kakunin({
+  apiKey: process.env.KAKUNIN_API_KEY!,  // kak_test_... key
+  baseUrl: 'https://www.kakunin.ai/api/v1',
+});
+```
+
+### 3. Run test agents
+
+```bash
+npm run agent:http-tool       # Autonomous lifecycle test
+npm run agent:event-harness   # 100+ events, throughput test
+npm run agent:discord         # Interactive CLI
+```
+
+## Data Isolation
+
+Test data is **completely isolated** from production:
+
+- Each tenant's test data is separate (RLS enforced)
+- Test data never appears in production dashboards or reports
+- Test certs are real X.509 but have no regulatory validity
+- No access to: compliance certifications, billing events
+
+## Cleanup
+
+Test data older than 7 days is automatically deleted nightly (2am UTC).
+
+```
+created_at < NOW() - INTERVAL '7 days' → DELETED
+```
+
+No manual reset available — plan your test runs within the 7-day window.
+
+## When to Use
+
+✅ **Integration testing** — Test agent registration → certificate → events → risk score  
+✅ **Load testing** — Stress-test with 100+ events, measure throughput  
+✅ **Feature development** — Experiment without affecting production  
+✅ **Demos** — Let users test without real data concerns  
+
+❌ **Do NOT use** for production workloads or real regulated transactions
+
+## Troubleshooting
+
+### Key not working?
+
+- Verify prefix: `kak_test_` (not `kak_live_`)
+- Confirm key is active in Dashboard → Developer → API Keys
+- Check `Authorization: Bearer kak_test_...` header is set
+
+### Data not appearing?
+
+- Confirm `KAKUNIN_API_KEY` is set to test key
+- Check `Content-Type: application/json` header
+- Verify request returned 2xx
+
+## After Integration Testing
+
+Once your agent works in sandbox:
+
+1. **Generate production key** — Dashboard → Developer → API Keys → Create live key
+2. **Swap key** — change `kak_test_...` to `kak_live_...` in env vars (URL stays the same)
+3. **Monitor risk scores** — Dashboard → Agents to watch behavioral monitoring
+4. **Set up webhooks** — configure `/api/v1/webhooks` for risk alerts
+
+## FAQ
+
+**Do I need a different base URL for sandbox?**
+
+No — `https://www.kakunin.ai/api/v1` for both. Key prefix determines test vs. live.
+
+**Are test and production data completely isolated?**
+
+Yes — RLS ensures only your tenant sees your test rows, and test rows are never mixed with production rows.
+
+**Can I migrate test data to production?**
+
+Not directly. Re-register your agent with a live key and re-run events in production.
+
+**How long does cleanup take?**
+
+Nightly job runs at 2am UTC. Cleanup typically completes within 5 minutes.
+
+---
+
+Next: [Integration Guide](/docs/quickstart-ai-agents) · [API Reference](/docs/api-reference)

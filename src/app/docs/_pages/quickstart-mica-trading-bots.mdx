@@ -1,0 +1,381 @@
+export const metadata = {
+  title: "Python Quickstart: MiCA-Compliant Trading Bot",
+  description: "Build a MiCA-compliant autonomous trading bot in Python using Freqtrade or CCXT. Covers SDK setup, certificate issuance, scope enforcement, and behavioral monitoring.",
+};
+
+# Python Quickstart: MiCA-Compliant Trading Bot
+
+This guide builds a production-ready MiCA-compliant trading bot in Python. It uses the Kakunin Python SDK with either Freqtrade or raw CCXT for exchange connectivity.
+
+**Time:** ~25 minutes  
+**Prerequisites:** Python 3.11+, pip, Kakunin account  
+**Stack:** Python · Kakunin Python SDK · Freqtrade or CCXT · Docker
+
+For the TypeScript/Kubernetes version, see [MiCA Trading Bot Quickstart](/docs/mica-trading-bot-quickstart).
+
+---
+
+## Step 1: Install Dependencies
+
+```bash
+pip install kakunin freqtrade ccxt python-dotenv
+```
+
+Or with a requirements file:
+
+```
+# requirements.txt
+kakunin>=1.0.0
+ccxt>=4.3.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+```
+
+---
+
+## Step 2: Configure Environment
+
+```bash
+# .env
+KAKUNIN_API_KEY=kak_live_xxxxxxxxxxxxxxxx   # kak_test_ for the sandbox
+EXCHANGE_API_KEY=xxxxxxxxxxxxxxxxxx
+EXCHANGE_SECRET=xxxxxxxxxxxxxxxxxx
+```
+
+```python
+# config.py
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    kakunin_api_key: str
+    exchange_api_key: str
+    exchange_secret: str
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+---
+
+## Step 3: Define MiCA Compliance Policy
+
+```python
+# mica_policy.py
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class TradingHours:
+    start: str       # "08:00" UTC
+    end: str         # "17:00" UTC
+    exclude_weekends: bool = True
+
+@dataclass
+class MiCAScope:
+    max_trade_size: float        # EUR per trade
+    max_daily_volume: float      # EUR per day
+    allowed_markets: List[str]   # e.g. ["EUR/USDT", "BTC/EUR"]
+    allowed_regions: List[str]   # e.g. ["eu-west-1"]
+    trading_hours: TradingHours
+
+@dataclass
+class MiCAPolicy:
+    agent_name: str
+    operator_name: str
+    operator_regulator_id: str   # FINMA/FCA/BaFin registration number
+    scope: MiCAScope
+    kill_switch_threshold: float = 0.85   # auto-revoke at this anomaly score
+    circuit_breaker_threshold: float = 0.75
+
+# Your policy:
+POLICY = MiCAPolicy(
+    agent_name="algo_trader_py_v1",
+    operator_name="Acme Capital GmbH",
+    operator_regulator_id="BAFIN-2026-00142",
+    scope=MiCAScope(
+        max_trade_size=25_000,
+        max_daily_volume=500_000,
+        allowed_markets=["EUR/USDT", "BTC/EUR", "ETH/EUR"],
+        allowed_regions=["eu-west-1"],
+        trading_hours=TradingHours(start="08:00", end="17:00"),
+    ),
+)
+```
+
+---
+
+## Step 4: Register Agent and Issue Certificate
+
+```python
+# agent_bootstrap.py
+import asyncio, os
+from kakunin import Kakunin
+from mica_policy import POLICY
+
+async def bootstrap_agent():
+    async with Kakunin(api_key=os.environ["KAKUNIN_API_KEY"]) as client:
+        # Create the agent with its MiCA scope baked into the certificate.
+        # financial_scope is encoded in the X.509 cert and enforced at verification.
+        agent = await client.agents.create(
+            name=POLICY.agent_name,
+            model="rule-based",                    # or your LLM model name
+            version="1.0.0",
+            model_hash="sha256:...",               # SHA-256 of your model weights/config
+            financial_scope={
+                "max_single_trade_usd": POLICY.scope.max_trade_size,
+                "daily_limit_usd": POLICY.scope.max_daily_volume,
+                "permitted_instruments": POLICY.scope.allowed_markets,
+                "leverage_permitted": False,
+            },
+            metadata={
+                "operator": POLICY.operator_name,
+                "regulator_id": POLICY.operator_regulator_id,
+                "annex_iii_category": "financial_services",
+            },
+        )
+        print(f"✓ Agent registered: {agent.id}")
+
+        # Issue the X.509 certificate via AWS KMS — the private key never leaves the HSM.
+        cert = await client.agents.certify(agent.id)
+        print(f"✓ Certificate issued: {cert.serial_number}")
+        return agent, cert
+
+if __name__ == "__main__":
+    agent, cert = asyncio.run(bootstrap_agent())
+    # Save agent.id and cert.serial_number to your secrets manager.
+    # Never log cert.certificate_pem to stdout in production.
+```
+
+---
+
+## Step 5: Enforce Scope on Every Trade
+
+```python
+# trading_engine.py
+import os
+from datetime import datetime, time
+from kakunin import Kakunin
+from kakunin.integrations.scope import verify_agent_scope
+import ccxt
+from mica_policy import POLICY
+
+client = Kakunin(api_key=os.environ["KAKUNIN_API_KEY"])
+AGENT_ID = os.environ["KAKUNIN_AGENT_ID"]
+
+exchange = ccxt.binance({
+    "apiKey": os.environ["EXCHANGE_API_KEY"],
+    "secret": os.environ["EXCHANGE_SECRET"],
+    "options": {"defaultType": "spot"},
+})
+
+
+# verify_agent_scope confirms the agent is active and holds trade.execute before
+# the function runs, raising ScopeViolationError otherwise (fail-closed).
+@verify_agent_scope(client, agent_id=AGENT_ID, required_scopes=["trade.execute"])
+async def execute_trade(market: str, side: str, size_eur: float) -> dict:
+    """Execute a single MiCA-compliant trade."""
+
+    # 1. Local pre-trade guards (defence in depth on top of the certified scope)
+    if market not in POLICY.scope.allowed_markets:
+        raise ValueError(f"Market {market} not in allowed scope")
+    if size_eur > POLICY.scope.max_trade_size:
+        raise ValueError(f"Trade size {size_eur} EUR exceeds limit")
+    if not _within_trading_hours():
+        raise ValueError("Outside MiCA-permitted trading hours")
+
+    trade = {"market": market, "side": side, "size_eur": size_eur}
+
+    # 2. Sign the trade with the agent's KMS-backed key (no key material leaves KMS).
+    signed = await client.agents.sign(AGENT_ID, payload=trade)
+    print(f"✓ Trade signed: {signed.signature[:20]}...")
+
+    # 3. Submit to the exchange
+    order = exchange.create_order(
+        symbol=market, type="market", side=side.lower(), amount=size_eur,
+    )
+
+    # 4. Stream the trade to Kakunin's risk engine (MiCA Art. 72 audit trail).
+    event = await client.events.create(
+        agent_id=AGENT_ID,
+        action_type="transaction_initiated",
+        details={"order_id": order["id"], "market": market, "side": side, "amount": size_eur},
+    )
+
+    # 5. React to the returned risk band. A high band queues an automatic
+    #    revocation check; you can also halt the agent yourself.
+    if event.risk_band == "high":
+        print("⚠️  High-risk band — halting for review")
+        await client.agents.halt(AGENT_ID, reason="anomaly_threshold_exceeded")
+
+    print(f"✓ Trade executed: {order['id']}")
+    return order
+
+
+def _within_trading_hours() -> bool:
+    now = datetime.utcnow()
+    if now.weekday() >= 5:  # Saturday = 5, Sunday = 6
+        return False
+    return time(8, 0) <= now.time() <= time(17, 0)
+```
+
+---
+
+## Step 6: Freqtrade Integration (Optional)
+
+If you're using Freqtrade, add Kakunin as a custom sell/buy reason callback:
+
+```python
+# freqtrade_kakunin_plugin.py
+import asyncio, os
+from freqtrade.strategy import IStrategy
+from kakunin import Kakunin
+
+client = Kakunin(api_key=os.environ["KAKUNIN_API_KEY"])
+AGENT_ID = os.environ["KAKUNIN_AGENT_ID"]
+
+class KakuninCompliantStrategy(IStrategy):
+    """
+    Wraps any Freqtrade strategy with Kakunin MiCA compliance.
+    Override confirm_trade_entry() to add a compliance check before each entry.
+    """
+
+    def confirm_trade_entry(
+        self, pair, order_type, amount, rate, time_in_force, current_time, entry_tag, **kwargs
+    ) -> bool:
+        try:
+            # Freqtrade callbacks are sync; drive the async client with asyncio.run.
+            agent, risk = asyncio.run(self._compliance_check())
+
+            if agent.status.value != "active":
+                self.log(f"Trade blocked — agent status: {agent.status.value}")
+                return False
+            if risk.risk_band.value == "high":
+                self.log("Trade blocked — agent in high-risk band")
+                return False
+            return True
+
+        except Exception as e:
+            self.log(f"Kakunin check failed: {e}")
+            return False  # Fail closed — block trade if the compliance check errors
+
+    async def _compliance_check(self):
+        agent = await client.agents.get(AGENT_ID)
+        risk = await client.agents.risk(AGENT_ID)
+        return agent, risk
+```
+
+---
+
+## Step 7: Behavioral Baseline (Automatic)
+
+You don't hand-author a baseline. Kakunin **derives** the agent's behavioral
+baseline from the events you stream via `events.create`, over a rolling 30-day
+window — there's nothing to register. Each new event is scored against it.
+
+Check readiness with `agents.risk`: `drift.drift_score` stays `None` until the
+baseline is established, then becomes a number.
+
+```python
+# kya_status.py
+import os
+from kakunin import Kakunin
+
+async def baseline_ready(agent_id: str) -> bool:
+    async with Kakunin(api_key=os.environ["KAKUNIN_API_KEY"]) as client:
+        risk = await client.agents.risk(agent_id)
+        ready = risk.drift is not None and risk.drift.drift_score is not None
+        print("✓ Baseline established" if ready else "… still warming up")
+        return ready
+```
+
+Run the bot against a paper-trading feed for the warm-up period so the baseline
+reflects normal operation before go-live.
+
+---
+
+## Step 8: Run with Docker
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "trading_engine.py"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.9'
+
+services:
+  trading-bot:
+    build: .
+    env_file: .env
+    environment:
+      - KAKUNIN_AGENT_ID=${KAKUNIN_AGENT_ID}
+    restart: unless-stopped
+    volumes:
+      - audit-logs:/var/audit
+
+volumes:
+  audit-logs:
+    driver: local
+```
+
+```bash
+docker compose up -d
+docker compose logs -f trading-bot
+```
+
+---
+
+## Step 9: Verify Compliance
+
+```bash
+# Check agent status + risk band
+python -c "
+import asyncio, os
+from kakunin import Kakunin
+
+async def main():
+    async with Kakunin(api_key=os.environ['KAKUNIN_API_KEY']) as c:
+        agent = await c.agents.get(os.environ['KAKUNIN_AGENT_ID'])
+        risk = await c.agents.risk(os.environ['KAKUNIN_AGENT_ID'])
+        print(f'Status: {agent.status.value}')
+        print(f'Risk band: {risk.risk_band.value}')
+
+asyncio.run(main())
+"
+
+# Expected:
+# Status: active
+# Risk band: low
+```
+
+---
+
+## MiCA Articles Satisfied
+
+| Article | Implementation |
+|---|---|
+| Art. 67 — CASP registration | `operator_regulator_id` in agent metadata |
+| Art. 68 — Conduct of business | Scope: `max_trade_size`, `allowed_markets`, trading hours |
+| Art. 70 — Record keeping | WORM audit log via `events.create()` |
+| Art. 72 — Transaction reporting | Every trade logged with signature + order ID |
+| Art. 73 — Prudential requirements | Anomaly scoring; circuit breaker at 0.75 |
+
+---
+
+## Next Steps
+
+- [MiCA Trading Bot Quickstart (TypeScript)](/docs/mica-trading-bot-quickstart) — Kubernetes deployment
+- [MiCA Trading Bots — Regulatory Deep Dive](/docs/mica-trading-bots) — Art. 67–75 analysis
+- [KYC Integration Guide](/docs/kyc-integration) — full API and SDK reference
+- [Regulatory Mapping Matrix](/docs/kyc-regulatory-mapping) — article-to-feature cross-reference

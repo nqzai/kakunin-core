@@ -1,0 +1,375 @@
+/* ============================================================
+   KAKUNIN — Auth page styles
+   Uses the same design tokens as landing.css
+   ============================================================ */
+
+:root {
+  --paper:        #F4F1E8;
+  --paper-warm:   #ECE7D6;
+  --paper-edge:   #E2DCC6;
+  --ink:          #14181B;
+  --ink-2:        #4A4F52;
+  --ink-3:        #8A8C84;
+  --green:        #2B934F;
+  --green-deep:   #1C6B39;
+  --green-bright: #3EB069;
+  --green-mint:   #B8E5C8;
+  --green-paper:  #DDEEDF;
+  --red:          #D8514B;
+  --card:         #FFFFFF;
+  --hairline:     rgba(20,24,27,0.08);
+  --hairline-2:   rgba(20,24,27,0.16);
+  --ff-display:   'Archivo Black', 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --ff-body:      'Geist', ui-sans-serif, system-ui, sans-serif;
+  --ff-mono:      'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
+  --r-sm:  10px;
+  --r-md:  14px;
+  --r-lg:  20px;
+  --shadow-md: 0 2px 0 rgba(20,24,27,0.04), 0 12px 32px -12px rgba(20,24,27,0.18);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.auth-root {
+  min-height: 100vh;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-family: var(--ff-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Brand bar ───────────────────────────────────────────── */
+.auth-brand {
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+.auth-brand a {
+  display: block;
+  text-decoration: none;
+}
+.auth-brand img {
+  height: 28px;
+  width: auto;
+  mix-blend-mode: multiply;
+}
+
+/* ── Card ────────────────────────────────────────────────── */
+.auth-card {
+  background: var(--card);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* Green accent bar at top of card */
+.auth-card::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: var(--green);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  margin: -40px -40px 32px;
+}
+
+.auth-title {
+  font-family: var(--ff-display);
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.auth-sub {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+/* ── Form fields ─────────────────────────────────────────── */
+.auth-form { display: grid; gap: 18px; }
+
+.auth-field { display: grid; gap: 6px; }
+.auth-label {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.auth-input {
+  font-family: var(--ff-body);
+  font-size: 14px;
+  padding: 11px 14px;
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  -webkit-appearance: none;
+}
+.auth-input:focus {
+  border-color: var(--green);
+  background: var(--card);
+}
+.auth-input::placeholder { color: var(--ink-3); }
+
+/* ── Submit button ───────────────────────────────────────── */
+.auth-btn {
+  font-family: var(--ff-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 18px;
+  border-radius: var(--r-sm);
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  margin-top: 4px;
+}
+.auth-btn--primary {
+  background: var(--green);
+  color: var(--paper);
+}
+.auth-btn--primary:hover { background: var(--green-deep); }
+.auth-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Status messages ─────────────────────────────────────── */
+.auth-error {
+  font-size: 13px;
+  color: var(--red);
+  background: #FBE9E7;
+  border: 1px solid #F2B6B2;
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin-top: -4px;
+}
+.auth-success {
+  font-size: 13px;
+  color: var(--green-deep);
+  background: var(--green-paper);
+  border: 1px solid var(--green-mint);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin-top: -4px;
+}
+
+/* ── Links row ───────────────────────────────────────────── */
+.auth-links {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.auth-links a {
+  color: var(--green);
+  text-decoration: none;
+  font-weight: 500;
+}
+.auth-links a:hover { color: var(--green-deep); text-decoration: underline; }
+
+/* ── Divider ─────────────────────────────────────────────── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-family: var(--ff-mono);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--paper-edge);
+}
+
+/* ── Footer stamp ────────────────────────────────────────── */
+.auth-stamp {
+  margin-top: 28px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+
+/* ── Plan selection card ─────────────────────────────────── */
+.plan-card {
+  background: var(--card);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: 40px;
+  width: 100%;
+  max-width: 680px;
+}
+.plan-card::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: var(--green);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  margin: -40px -40px 32px;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.plan-option {
+  position: relative;
+  background: var(--paper);
+  border: 1.5px solid var(--hairline-2);
+  border-radius: var(--r-md);
+  padding: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  font-family: var(--ff-body);
+}
+.plan-option:hover {
+  border-color: var(--green-mint);
+  background: var(--paper-warm);
+}
+.plan-option--selected {
+  border-color: var(--green);
+  background: var(--green-paper);
+  box-shadow: 0 0 0 3px var(--green-mint);
+}
+.plan-option--featured {
+  border-color: var(--green);
+}
+
+.plan-badge {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  background: var(--green);
+  color: var(--paper);
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+
+.plan-option-name {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  margin-bottom: 8px;
+}
+.plan-option-price {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-bottom: 2px;
+}
+.plan-option-amount {
+  font-family: var(--ff-display);
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.plan-option-unit {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.plan-option-min {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--ff-mono);
+  margin-bottom: 14px;
+}
+.plan-option-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-option-features li {
+  font-size: 12px;
+  color: var(--ink-2);
+  padding-left: 16px;
+  position: relative;
+}
+.plan-option-features li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-radio {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--hairline-2);
+  border-radius: 50%;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: var(--card);
+  transition: border-color 0.15s ease;
+}
+.plan-radio--on {
+  border-color: var(--green);
+  background: var(--green);
+  box-shadow: inset 0 0 0 3px var(--card);
+}
+
+.plan-trial-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--green-deep);
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+  .plan-grid { grid-template-columns: 1fr; }
+  .plan-card { padding: 28px 20px; }
+  .plan-card::before { margin: -28px -20px 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

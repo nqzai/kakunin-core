@@ -1,0 +1,94 @@
+---
+title: 'Event Ingestion'
+description: Stream behavioral events from AI agents to Kakunin for real-time risk scoring, anomaly detection, and auto-revocation at 0.85.
+lastUpdated: "2026-05-24"
+---
+
+## Overview
+
+Every action your agent takes can be recorded as a **behaviour event**. Kakunin scores each event in real time and returns a risk band.
+
+## Supported Action Types
+
+| Action | Description |
+|---|---|
+| `api_call` | Agent called an external API |
+| `authentication_attempt` | Agent attempted to authenticate to an external service |
+| `authentication_failure` | Agent failed to authenticate to an external service |
+| `data_access` | Agent read or queried a data source |
+| `data_mutation` | Agent created, updated, or deleted records |
+| `transaction_initiated` | Agent initiated a financial transaction or transfer |
+| `transaction_anomaly` | Agent exhibited anomalous transaction behaviour |
+| `unauthorized_access_attempt` | Agent attempted an action outside its permitted scope |
+| `message_signed` | Agent signed a message with its private key |
+| `message_verification_failed` | Agent failed to verify a signed message |
+
+## Recording an Event
+
+```bash
+POST /v1/events
+```
+
+```json
+{
+  "agent_id": "uuid",
+  "action_type": "api_call",
+  "payload": {
+    "tool": "web_search",
+    "query": "EUR/USD spot rate",
+    "duration_ms": 420
+  }
+}
+```
+
+**Response `201`:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "agent_id": "uuid",
+    "action_type": "api_call",
+    "risk_score": 0.12,
+    "risk_band": "low",
+    "occurred_at": "2026-05-17T10:00:00Z"
+  }
+}
+```
+
+## Risk Bands
+
+| Band | Score Range | Behaviour |
+|---|---|---|
+| `low` | `< 0.3` | Normal operation |
+| `medium` | `0.3 – 0.84` | Logged, monitored |
+| `high` | `≥ 0.85` | Triggers auto-revocation check |
+
+## Querying Events
+
+```bash
+GET /v1/events?agent_id={id}&band=high&limit=50
+```
+
+**Filters:**
+| Parameter | Type | Description |
+|---|---|---|
+| `agent_id` | uuid | Filter by agent |
+| `band` | `low` \| `medium` \| `high` | Filter by risk band |
+| `action_type` | string | Filter by action type |
+| `before` | ISO 8601 | Cursor for pagination (newest first) |
+| `limit` | integer | Max results, capped at 100 |
+
+**Response:**
+```json
+{
+  "data": [...],
+  "has_next_page": true,
+  "next_cursor": "2026-05-17T09:55:00.000Z"
+}
+```
+
+## Risk Scoring
+
+Events are scored using AI-powered anomaly detection (Claude Haiku via OpenRouter). Scoring is synchronous — the score is returned in the `201` response.
+
+High-risk events (`≥ 0.85`) write an `audit_log` entry and trigger an agent status review.

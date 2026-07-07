@@ -1,0 +1,180 @@
+---
+title: 'Register AI Agents'
+description: Register, certify, and monitor any AI system with X.509 cryptographic identity, behavioral tracking, and AI agent authentication methods that hold up in a regulatory exam.
+---
+
+## Overview
+
+An **agent** is any AI system you want to register, certify, and monitor with cryptographic identity. Trading bots, document processors, customer-facing assistants, fraud-detection models, customs filing agents — any automated system operating in a regulated environment.
+
+Kakunin gives every agent a **non-human identity (NHI)** — an X.509 certificate that binds the agent's name, operator, model version, and permitted actions into a tamper-proof cryptographic credential. The credential is publicly verifiable, regulator-accessible, and auto-revoked when behavioral risk crosses your configured threshold.
+
+## Agent Lifecycle
+
+Every agent moves through four states:
+
+```
+pending → active → suspended → retired
+              ↑         |
+              └─────────┘ (reactivate via new cert)
+```
+
+| Status | Meaning | Certificate state |
+|---|---|---|
+| `pending` | Registered, awaiting first certificate | None issued |
+| `active` | Certified and operational | Valid, within window |
+| `suspended` | Certificate revoked — risk threshold or manual | Revoked |
+| `retired` | Permanently decommissioned | Revoked + archived |
+
+### pending → active
+
+Calling `POST /v1/agents/{id}/certify` triggers AWS KMS to generate an RSA-2048 keypair inside the hardware security module. The private key never leaves KMS — Kakunin stores only the `kms_key_arn`. The resulting X.509 certificate is valid for 365 days (required by MiCA Art. 70) and transitions the agent to `active`. An AgentMail inbox is provisioned automatically at the same time.
+
+Total time from `POST /v1/agents/{id}/certify` to first verified certificate: under 3 seconds.
+
+### active → suspended
+
+Two paths lead to suspension:
+
+- **Automatic** — rolling 30-day risk score crosses 0.85 → auto-revocation fires within 60 seconds, webhook delivered, AgentMail inbox deactivated
+- **Manual** — `POST /v1/certificates/{id}/revoke` with a structured `revocation_reason` (required by MiCA Art. 72)
+
+Both paths write an immutable entry to the audit log and fire the `certificate.revoked` webhook to your registered endpoints.
+
+### suspended → active (reactivate)
+
+Reactivation requires a new certificate issuance — the revoked certificate cannot be reinstated. Call `POST /v1/agents/{id}/certify` again. Kakunin generates a new KMS keypair, issues a fresh certificate with a new serial, and returns the agent to `active`. The old certificate remains in the public CRL.
+
+### active → retired
+
+Retirement is permanent. `DELETE /v1/agents/{id}` marks the agent `retired`, revokes any active certificate with reason `retired`, and closes the AgentMail inbox. The full audit trail is preserved and accessible — retirement does not purge historical data.
+
+## Create an Agent
+
+```bash
+POST /v1/agents
+```
+
+```json
+{
+  "name": "trading-bot-prod",
+  "model": "gpt-4o",
+  "version": "1.0.0",
+  "permitted_actions": ["read:market-data", "write:orders"],
+  "operator_org": "Acme Capital",
+  "model_hash": "sha256:8f3c2a91d4b7e6c3..."
+}
+```
+
+**Response `201`:**
+```json
+{
+  "data": {
+    "id": "agt_8f3c2a91d4",
+    "name": "trading-bot-prod",
+    "model": "gpt-4o",
+    "version": "1.0.0",
+    "status": "pending",
+    "permitted_actions": ["read:market-data", "write:orders"],
+    "tenant_id": "ten_4b8c1d...",
+    "created_at": "2026-05-17T00:00:00Z"
+  }
+}
+```
+
+## List Agents
+
+```bash
+GET /v1/agents?status=active
+```
+
+Returns all agents for the authenticated tenant. Filter by `status` (`pending`, `active`, `suspended`, `retired`). Response includes current risk score, certificate serial, and last event timestamp for each agent.
+
+## Certify an Agent
+
+Issuing a certificate transitions the agent from `pending` to `active` and provisions an AgentMail inbox automatically.
+
+```bash
+POST /v1/agents/{id}/certify
+```
+
+Response includes `cert_pem` (the X.509 certificate in PEM format) and `kms_key_arn` (the AWS KMS key reference). Never the raw private key. See [Certificates](/docs/certificates) for the full certificate lifecycle.
+
+## AI Agent Authentication Methods
+
+Choosing the right AI agent authentication methods is the most consequential security decision when deploying autonomous systems. Unlike human users, AI agents operate continuously, make thousands of decisions per minute, and have no natural session boundary — making static credentials a high-value, persistent attack surface.
+
+Kakunin supports four AI agent authentication methods, ordered from strongest to weakest:
+
+### 1. X.509 Certificate Authentication (Recommended)
+
+The strongest of all available AI agent authentication methods. A short-lived X.509 certificate (RSA-2048, up to 365 days) issued by Kakunin's Certificate Authority cryptographically binds:
+
+- Agent identity (name, version, operator org)
+- Permitted action scopes (`read:invoices`, `write:drafts`, etc.)
+- Valid-from / valid-until window
+- Certificate serial for public verification at `/v1/verify/{serial}`
+
+The private key is generated inside AWS KMS and never exported in plaintext. Any downstream service — including a regulator or counterparty — can verify the agent's identity without a Kakunin account.
+
+```http
+X-Kakunin-Cert-Serial: 3A:F2:91:CC:04:B7:DE:88:51:2E:9F:07:AC:33:61:D4
+```
+
+### 2. mTLS at the Gateway
+
+For service-mesh architectures, agents present their X.509 certificate in a mutual TLS handshake. The receiving gateway verifies the certificate before the request reaches your microservices — enforcement without per-route code.
+
+```
+Agent → [mTLS: presents cert] → Gateway → [GET /v1/verify/:serial] → Service
+```
+
+Revocation propagates immediately: a suspended agent's next mTLS handshake fails at the gateway. No TTL to wait out. No stale cache window.
+
+### 3. OAuth 2.0 Client Credentials
+
+For agents that need to interact with OAuth-protected APIs, the Kakunin certificate serial can serve as `client_id` in a `client_credentials` grant. Token introspection confirms the agent's scopes against its certificate at issuance time.
+
+Suitable when the upstream service requires OAuth tokens but the agent itself is Kakunin-certified. Certificate revocation does not automatically invalidate issued OAuth tokens — your token TTL becomes the enforcement lag.
+
+### 4. API Key (Legacy — Avoid)
+
+Static API keys are supported for legacy integrations but carry significant risk: they never expire on their own, cannot be scoped to a specific agent, and a single leaked key compromises every agent using it simultaneously. These are among the least suitable AI agent authentication methods for regulated environments.
+
+If you must use API keys, scope them `read-only` and rotate every 30 days. Migrate to X.509-based authentication as soon as operationally feasible.
+
+| Method | Expiry | Per-agent scope | Public verify | Revocation lag |
+|---|---|---|---|---|
+| X.509 Certificate | 365 days max | ✓ | ✓ no-auth | < 60s |
+| mTLS Gateway | 365 days (cert) | ✓ | ✓ no-auth | < 60s |
+| OAuth 2.0 CC | Token TTL | Partial | Via introspect | Token expiry |
+| API Key | Never | ✗ | ✗ | Manual rotation |
+
+## Behavioral Monitoring
+
+After certification, every action your agent takes can be streamed to Kakunin as a behavioral event. Each event is scored in real time against a rolling 30-day risk window. Ten action types are supported:
+
+| Action type | Risk weight | Example |
+|---|---|---|
+| `api_call` | low | Agent calls an external API |
+| `authentication_attempt` | low | Agent attempts to authenticate |
+| `authentication_failure` | medium-high | Repeated login failures |
+| `data_access` | low | Agent reads a customer record |
+| `data_mutation` | medium | Agent creates, updates, or deletes records |
+| `transaction_initiated` | medium | Agent initiates a payment |
+| `transaction_anomaly` | high | Anomalous transaction pattern detected |
+| `unauthorized_access_attempt` | high | Agent tries an out-of-scope action |
+| `message_signed` | low | Agent signs a message with its KMS key |
+| `message_verification_failed` | high | Signature verification failure — possible spoofing |
+
+Risk score `>= 0.85` triggers auto-revocation. Score `>= 0.75` fires a pre-revocation warning to the compliance officer and writes a `notification.pre_revocation_warning` entry.
+
+## Agent Inbox
+
+After certification, each agent receives a dedicated email inbox at `{agent-name}@{tenant}.kakunin.to`. The inbox is:
+
+- **Verified** — tied to the agent's certificate serial, publicly provable
+- **Logged** — every inbound and outbound message lands in the immutable audit trail
+- **Deactivated on revocation** — suspended or retired agents cannot receive new mail
+
+Use the AgentMail inbox for supervisor inquiries (BaFin, AMF, FCA), auditor requests for compliance excerpts, counterparty identity verification, and automated daily digest reports from the risk engine.

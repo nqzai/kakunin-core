@@ -1,0 +1,429 @@
+export const metadata = {
+  title: "Autonomous AI Security Guide — Threat Model, Identity & Enforcement",
+  description: "Security architecture for autonomous AI agents: threat modeling, cryptographic identity, runtime enforcement, anomaly detection, and incident response.",
+};
+
+# Autonomous AI Security Guide
+
+Autonomous agents operate with real authority: executing trades, calling APIs, modifying infrastructure, processing payments. Traditional application security was designed for deterministic software controlled by humans. Agents are different — they make decisions at runtime, spawn sub-agents, use external tools, and act without synchronous human approval.
+
+This guide covers the threat model, defensive architecture, and operational controls required to deploy AI agents securely in regulated environments.
+
+---
+
+## Threat Model
+
+### What Changes When Software Becomes Autonomous
+
+Traditional application security assumes the application logic is fixed at deploy time. Autonomous agents introduce three new threat vectors:
+
+**1. Prompt Injection**  
+An adversarial payload embedded in external data (a document, a search result, a user message) causes the agent to execute unintended actions. Unlike SQL injection, the exploit surface is natural language rather than syntax.
+
+**2. Tool Scope Escalation**  
+An agent with access to `read_file` and `execute_bash` can be coerced into combining them in ways the operator never intended. Scope policies on the certificate layer constrain what the agent may do, independent of what the LLM decides.
+
+**3. Identity Spoofing**  
+Without cryptographic identity, there's no way to verify that the agent performing a transaction is the same agent that was authorised. An attacker who gains container access can impersonate the agent unless identity is bound to a hardware-backed key in KMS/HSM.
+
+### Attack Surface Matrix
+
+| Vector | Exploited By | Mitigation |
+|---|---|---|
+| Prompt injection | Adversarial content in tool outputs | Sandboxed tool execution; output validation |
+| Stolen API key | Network interception; env var leak | Replace API keys with X.509 certificates |
+| Container escape | Runtime vulnerability | KMS-backed keys; key never in container memory |
+| Rogue sub-agent | LLM-orchestrated agent spawning | Sub-agent certificate scope = subset of parent |
+| Baseline drift | Gradual objective deviation | Continuous behavioral profiling; rolling baseline |
+| Replay attack | Captured signed request | Signed nonces; short-lived certificate validity |
+
+---
+
+## Cryptographic Identity
+
+### Why API Keys Are Not Enough
+
+API keys are:
+- Stored in environment variables (leaked by `env` dumps)
+- Shared across all instances of an agent (can't distinguish individual agents)
+- Not revocable atomically (rotating a key breaks all instances simultaneously)
+- No proof of authorship (key hash, not cryptographic signature)
+
+X.509 certificates issued by Kakunin solve all of these:
+
+```typescript
+// Register agent — one certificate per agent instance. Scope limits are encoded
+// into the certificate, so verification enforces authority cryptographically.
+const agent = await kakunin.agents.create({
+  name: 'payment-processor-eu-v3',
+  model_hash: await Kakunin.computeModelHash('payment-processor:v3.1.0'),
+  model: 'payment-processor',
+  version: '3.1.0',
+  permitted_actions: ['charge', 'refund'],
+  financial_scope: {
+    max_single_trade_usd: 10_000,
+    permitted_venues: ['stripe', 'revolut'],
+  },
+  metadata: { deployment: 'k8s-eu-west-1', instance: process.env.POD_NAME },
+});
+
+const cert = await kakunin.agents.certify(agent.id);
+// cert.certificate_pem — public certificate (safe to share, embed in requests).
+// The RSA private key stays in Kakunin's AWS KMS and never leaves the HSM.
+```
+
+### Certificate Trust Chain
+
+```
+Kakunin Root CA (AWS KMS RSA_4096, eu-west-1)
+  └── Kakunin Intermediate CA (per-tenant)
+        └── Agent Certificate (per-agent-instance)
+              ├── Subject: CN=payment-processor-eu-v3
+              ├── SAN: agent-id=a_xyz123
+              ├── Scope extensions (custom X.509 extensions)
+              └── Validity: 365 days
+```
+
+### Signing Agent Actions
+
+Every significant action should be signed with the agent's private key before submission:
+
+```typescript
+// Kakunin signs with the agent's KMS-backed key — you never hold key material.
+async function signAction(agentId: string, payload: object) {
+  const res = await fetch(`https://api.kakunin.ai/v1/agents/${agentId}/sign`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ payload }),
+  });
+  // → { signature, certificate_serial, ... }. The signature is produced inside
+  //   AWS KMS (RSASSA_PKCS1_V1_5_SHA_256); the private key never leaves the HSM.
+  return res.json();
+}
+```
+
+Downstream systems verify against the agent's public certificate in a single
+keyless call — Kakunin checks the signature and that the certificate is active:
+
+```typescript
+async function verifySignedAction(
+  payload: Record<string, unknown>,
+  signature: string,
+  certificateSerial: string,
+) {
+  const res = await fetch('https://api.kakunin.ai/v1/verify/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload, signature, certificate_serial: certificateSerial }),
+  });
+  const result = await res.json();
+  if (!result.valid) throw new Error('signature or certificate invalid');
+
+  // Enforce scope from the verified certificate
+  if ((payload.amount as number) > result.financial_scope.max_single_trade_usd) {
+    throw new Error('Action exceeds certificate scope');
+  }
+  return { verified: true, agentId: result.agent_id };
+}
+```
+
+---
+
+## Runtime Enforcement
+
+### Scope Policy Architecture
+
+Scope policies are embedded in the certificate as custom X.509 extensions. They cannot be modified without reissuing the certificate (requires Kakunin CA private key in KMS). Three enforcement layers:
+
+**Layer 1 — Gateway (API Layer)**  
+Middleware reads certificate scope before routing requests. Requests outside scope are rejected with 403 before reaching business logic.
+
+**Layer 2 — Tool Guard (LLM Tool Layer)**  
+Each tool call passes through `verify_agent_scope` before execution:
+
+```typescript
+import { createVerifier } from '@kakunin/sdk/verify';
+
+const verifier = createVerifier();          // fail-closed, 60s cert cache
+const serial = process.env.AGENT_CERT_SERIAL!;
+
+// Wrap a tool so its scope is checked (fail-closed) before every call.
+function guard<T>(action: string, fn: (p: T) => Promise<unknown>) {
+  return async (params: T) => {
+    const agent = await verifier.cert(serial);
+    if (agent.status !== 'active' || !agent.permitted_actions.includes(action)) {
+      throw new Error(`scope violation: '${action}' not permitted`);
+    }
+    // On failure the LLM receives a tool error, not unguarded execution.
+    return fn(params);
+  };
+}
+
+const tools = {
+  charge: guard('charge', async (params) => stripe.charges.create(params)),
+  refund: guard('refund', async (params) => stripe.refunds.create(params)),
+};
+```
+
+For a drop-in wrapper, use the framework guards: `KakuninToolGuard`
+(`@kakunin/langchain`), `KakuninIntegration` (`@kakunin/mastra`), or
+`createKakuninTools` (`@kakunin/ai-sdk`).
+
+**Layer 3 — Behavioral Anomaly (Monitoring Layer)**  
+Even scope-compliant actions are checked against behavioral baseline. 100 individually valid €9,900 charges in 10 minutes is compliant per scope, but a 12× deviation from the hourly baseline triggers a pre-revocation warning.
+
+### LangChain Integration
+
+```python
+import os
+from kakunin import Kakunin, verify_agent_scope
+from langchain_core.tools import tool
+
+client = Kakunin(api_key=os.environ["KAKUNIN_API_KEY"])
+AGENT_ID = os.environ["AGENT_ID"]
+
+# verify_agent_scope confirms the agent is active and holds "charge" before the
+# tool runs, raising ScopeViolationError otherwise (never swallowed).
+@tool
+@verify_agent_scope(client, agent_id=AGENT_ID, required_scopes=["charge"])
+def process_payment(amount: float, currency: str, customer_id: str) -> str:
+    """Process a customer payment."""
+    result = stripe.charge(amount, currency, customer_id)
+    return f"Charged {amount} {currency} to {customer_id}: {result.id}"
+```
+
+Prefer a StructuredTool wrapper? Use `KakuninToolGuard` from
+`kakunin.integrations.langchain` (`pip install kakunin[langchain]`).
+
+---
+
+## Behavioral Security
+
+### Establishing Baseline
+
+Run the agent in observation mode for 7–14 days before enforcing behavioral limits:
+
+```typescript
+// Register the agent, then ingest events during a warm-up run.
+const agent = await kakunin.agents.create({
+  name: 'payment-processor-eu-v3',
+  model_hash: await Kakunin.computeModelHash('payment-processor:v3'),
+  model: 'payment-processor',
+  version: '3.0.0',
+});
+
+// Kakunin builds the behavioral baseline automatically from ingested events over
+// a rolling 30-day window — there is nothing to author or lock. Check progress
+// with getRisk: drift.drift_score stays null until the baseline is established.
+const risk = await kakunin.agents.getRisk(agent.id);
+console.log(risk.drift.drift_score);  // null while warming up, then a number
+console.log(risk.dominant_band);      // 'low' | 'medium' | 'high'
+```
+
+### Anomaly Score Thresholds
+
+| Score | Band | Action |
+|---|---|---|
+| `< 0.3` | Low | Allow; log normally |
+| `0.3 – 0.74` | Medium | Allow; increase log verbosity |
+| `>= 0.75` | High | Issue pre-revocation warning; page on-call |
+| `>= 0.85` | Critical | Auto-revoke certificate; halt all agent actions |
+
+These bands are the platform defaults: high-band events queue a pre-revocation warning, and the risk engine auto-revokes at the critical threshold.
+
+### Detecting Specific Attack Patterns
+
+**Prompt injection leading to data exfiltration:**
+- Agent suddenly accesses data it never accessed before
+- High entropy in tool call parameters (suspicious encoding)
+- API calls to endpoints outside normal scope
+
+**Compromised container (stolen cert used from outside):**
+- Geographic anomaly — agent certificate used from unexpected region
+- Timing anomaly — actions outside normal operating hours
+- Certificate used simultaneously from two different IPs
+
+**Gradual objective drift:**
+- Slow accumulation of out-of-baseline transactions (each individually plausible)
+- Detected by rolling 30-day baseline comparison, not point-in-time checks
+
+---
+
+## Incident Response
+
+### Certificate Revocation
+
+When an anomaly score exceeds 0.85, Kakunin issues a pre-revocation warning and schedules automatic revocation:
+
+```typescript
+// Webhook received when anomaly threshold breached
+app.post('/webhook/kakunin', async (req, res) => {
+  const event = req.body;
+
+  if (event.type === 'agent.pre_revocation_warning') {
+    const { agent_id, risk_score, anomaly_details } = event.data;
+
+    // 1. Page on-call
+    await pagerduty.createIncident({
+      title: `Agent ${agent_id} anomaly score ${risk_score}`,
+      severity: 'high',
+      details: anomaly_details,
+    });
+
+    // 2. Optional: suspend non-critical tasks while investigating
+    await agentOrchestrator.pause(agent_id, { reason: 'anomaly_investigation' });
+
+    res.json({ acknowledged: true });
+  }
+
+  if (event.type === 'agent.certificate_revoked') {
+    const { agent_id, revocation_reason } = event.data;
+
+    // 1. Hard stop — refuse all new tasks
+    await agentOrchestrator.terminate(agent_id);
+
+    // 2. Quarantine transactions from the anomaly window
+    await compliance.flagForReview({
+      agent_id,
+      from: event.data.anomaly_start,
+      to: event.data.revoked_at,
+    });
+
+    // 3. Spin up replacement agent (new certificate, fresh identity)
+    await agentOrchestrator.spawn({
+      template: agent_id,
+      reason: 'post_revocation_replacement',
+    });
+
+    res.json({ acknowledged: true });
+  }
+});
+```
+
+### Forensic Audit Trail
+
+After an incident, the audit log provides complete reconstruction:
+
+```typescript
+// Pull all actions for the affected agent during the incident window
+const auditTrail = await supabase
+  .from('audit_log')
+  .select('*')
+  .eq('tenant_id', tenantId)
+  .eq('actor_id', agentId)
+  .gte('created_at', incidentStart.toISOString())
+  .lte('created_at', incidentEnd.toISOString())
+  .order('created_at', { ascending: true });
+
+// Each row contains:
+// - Signed action payload (proves what the agent intended)
+// - Signature (proves it was this agent's certificate)
+// - Risk score at time of action
+// - Tool call parameters
+// - Outcome
+```
+
+Every row is WORM — no update, no delete. Satisfies EU AI Act Article 12 record-keeping and MiCA Article 71 audit trail requirements.
+
+---
+
+## Infrastructure Hardening
+
+### Kubernetes Deployment Pattern
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: payment-agent-pod
+  annotations:
+    kakunin.ai/agent-id: "a_xyz123"
+    kakunin.ai/certificate-fingerprint: "sha256:abc..."
+spec:
+  serviceAccountName: payment-agent-sa  # Minimal RBAC
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: agent
+    image: myorg/payment-agent:v3.1.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+      readOnlyRootFilesystem: true
+    env:
+    - name: AGENT_ID
+      value: "a_xyz123"
+    - name: KMS_KEY_ARN
+      valueFrom:
+        secretKeyRef:
+          name: kakunin-creds
+          key: kms-key-arn
+    # KAKUNIN_API_KEY from Doppler / external-secrets
+    volumeMounts:
+    - name: cert-volume
+      mountPath: /var/certs
+      readOnly: true
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: cert-volume
+    projected:
+      sources:
+      - secret:
+          name: agent-certificate
+  - name: tmp
+    emptyDir: {}
+```
+
+### Network Policy
+
+Restrict egress to only required endpoints:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-agent-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-agent
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Stripe, Kakunin API
+    ports:
+    - protocol: TCP
+      port: 443
+  # Block all other egress (no DNS exfiltration, no metadata endpoints)
+```
+
+---
+
+## Compliance Mapping
+
+| Control | Kakunin Feature | Regulation |
+|---|---|---|
+| Agent identity documentation | X.509 certificate with serial number | EU AI Act Art. 11, MiCA Art. 70 |
+| Authority limits enforced | Scope policy in certificate | EU AI Act Art. 26, MiCA Art. 67 |
+| Continuous monitoring | Behavioral baseline + anomaly detection | EU AI Act Art. 9, MiCA Art. 72 |
+| Automatic halt | Auto-revocation at score ≥ 0.85 | EU AI Act Art. 14 (human oversight) |
+| Immutable audit trail | WORM audit_log (no UPDATE/DELETE) | EU AI Act Art. 12, MiCA Art. 71 |
+| Incident reporting | Webhook + pre-revocation warnings | EU AI Act Art. 73, MiCA Art. 67 |
+
+---
+
+## What's Next?
+
+- **[Know Your Agent (KYA)](/docs/know-your-agent)** — full framework for agent governance
+- **[Runtime Binding](/docs/runtime-binding)** — binding certificates to specific deployment environments
+- **[MiCA Trading Bot Guide](/docs/mica-trading-bots)** — regulatory requirements for algorithmic trading agents
+- **[API Reference](/api-docs)** — full Kakunin SDK documentation

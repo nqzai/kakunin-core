@@ -1,0 +1,407 @@
+/* ============================================================
+   TEST RESULTS PAGE — Kakunin
+   Design tokens from landing.css (imported by page.tsx).
+   ============================================================ */
+
+.tr-page {
+  background: var(--paper);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Hero ── */
+.tr-hero {
+  padding: 80px 0 64px;
+  text-align: center;
+}
+
+.tr-hero h1 {
+  font-family: var(--ff-display);
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 900;
+  line-height: 1.0;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin: 16px 0 20px;
+}
+
+.tr-hero h1 .count-pass { color: var(--green); }
+
+.tr-hero .subtitle {
+  font-size: 17px;
+  color: var(--ink-2);
+  max-width: 560px;
+  margin: 0 auto 0;
+  line-height: 1.6;
+}
+
+/* ── Summary bar ── */
+.tr-summary {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 0 24px 64px;
+  max-width: var(--container);
+  margin: 40px auto 0;
+}
+
+.tr-stat {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  padding: 20px 28px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  min-width: 130px;
+  flex: 1;
+  max-width: 200px;
+}
+
+.tr-stat-value {
+  font-family: var(--ff-display);
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--ink);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.tr-stat-value.pass  { color: var(--green); }
+.tr-stat-value.fail  { color: var(--red); }
+.tr-stat-value.skip  { color: var(--ink-3); }
+.tr-stat-value.time  { font-size: 22px; color: var(--ink); }
+
+.tr-stat-label {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+/* ── Section headings ── */
+.tr-section {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 24px 72px;
+}
+
+.tr-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.tr-section-head h2 {
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.tr-section-head .tr-total {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* ── Suite grid ── */
+.tr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .tr-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Suite card ── */
+.tr-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.tr-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--hairline-2);
+}
+
+.tr-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tr-card-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* layer badge */
+.badge-layer {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+}
+.badge-layer.unit         { background: #EAE6FD; color: #4B38B3; }
+.badge-layer.integration  { background: var(--green-paper); color: var(--green-deep); }
+.badge-layer.security     { background: #FEE9E7; color: #A63330; }
+.badge-layer.sdk          { background: #E0F2FE; color: #0369A1; }
+
+/* live-db badge */
+.badge-live {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-dark);
+  color: var(--green-bright);
+  font-weight: 500;
+}
+
+/* pass pill on card */
+.tr-pass-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  color: var(--green-deep);
+  background: var(--green-paper);
+  border-radius: var(--r-pill);
+  padding: 5px 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tr-pass-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+.tr-card-title {
+  font-family: var(--ff-display);
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.tr-card-file {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.tr-card-desc {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  flex: 1;
+}
+
+/* individual test rows */
+.tr-tests {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 14px;
+}
+
+.tr-test-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.tr-test-row .icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+}
+
+.tr-test-row .icon.pass {
+  background: var(--green-paper);
+  color: var(--green-deep);
+}
+
+/* ── Coverage table ── */
+.tr-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-sm);
+}
+
+.tr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--card);
+}
+
+.tr-table thead tr {
+  background: var(--paper-warm);
+  border-bottom: 1px solid var(--paper-edge);
+}
+
+.tr-table th {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 12px 20px;
+  text-align: left;
+  font-weight: 500;
+}
+
+.tr-table td {
+  padding: 13px 20px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.tr-table tr:last-child td { border-bottom: none; }
+
+.tr-table td:first-child {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.td-approach {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--green-deep) !important;
+  background: var(--green-paper);
+  border-radius: var(--r-xs);
+  padding: 2px 7px;
+  display: inline-block;
+  font-weight: 600 !important;
+}
+
+.td-approach.mocked {
+  color: var(--ink-2) !important;
+  background: var(--paper-warm);
+}
+
+/* ── Run command box ── */
+.tr-run-box {
+  background: var(--surface-dark);
+  border-radius: var(--r-lg);
+  padding: 28px 32px;
+  color: #F4F1E8; /* stable cream — dark bg in both modes */
+}
+
+.tr-run-box h3 {
+  font-family: var(--ff-display);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--paper);
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.tr-run-cmds {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tr-run-cmd {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tr-run-cmd code {
+  font-family: var(--ff-mono);
+  font-size: 12px;
+  color: var(--green-bright);
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.tr-run-cmd .cmd-label {
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  padding-left: 2px;
+}
+
+/* ── Footer trust bar ── */
+.tr-trust {
+  max-width: var(--container);
+  margin: 0 auto 80px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.tr-trust-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.tr-trust-item svg {
+  color: var(--green);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tr-divider {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--paper-edge);
+}

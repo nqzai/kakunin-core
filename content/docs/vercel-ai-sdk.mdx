@@ -1,0 +1,215 @@
+---
+title: Vercel AI SDK
+description: "@kakunin/ai-sdk — drop-in compliance tools for the Vercel AI SDK. Verify agent certificates, check scope, read risk scores, and emit EU AI Act audit events inside generateText() or streamText()."
+---
+
+`@kakunin/ai-sdk` provides four Kakunin compliance tools ready for use with the [Vercel AI SDK](https://ai-sdk.dev) `generateText()`, `streamText()`, and `generateObject()` functions.
+
+> **Source:** [`nqzai/kakunin-integrations`](https://github.com/nqzai/kakunin-integrations) (npm workspace) — Apache-2.0, published to npm with provenance.
+
+<Callout type="info">
+Looking for the Vercel Marketplace deploy integration (one-click `KAK_API_KEY` injection)? That's a separate integration — see [Vercel Integration](/docs/vercel-integration).
+</Callout>
+
+---
+
+## Installation
+
+```bash
+npm install @kakunin/ai-sdk ai zod
+```
+
+Requires Node.js 18+.
+
+---
+
+## Quickstart
+
+```ts
+import { createKakuninTools } from '@kakunin/ai-sdk';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const tools = createKakuninTools({
+  apiKey: process.env.KAK_API_KEY!,
+  agentId: 'agt-123',   // default agent for tool calls
+});
+
+const { text } = await generateText({
+  model: openai('gpt-4o'),
+  tools,
+  prompt: 'Check the risk score for agent agt-123 before proceeding with the trade.',
+});
+```
+
+---
+
+## `createKakuninTools(config)`
+
+Returns a `Record<string, CoreTool>` compatible with all Vercel AI SDK generation functions.
+
+```ts
+import { createKakuninTools } from '@kakunin/ai-sdk';
+
+const tools = createKakuninTools({
+  apiKey: 'kak_live_...',   // required — kak_live_... or kak_test_...
+  agentId: 'agt-123',        // optional — default agent ID for tool calls
+  baseUrl: 'https://www.kakunin.ai/api/v1',  // optional — override API base
+});
+```
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `apiKey` | `string` | ✓ | Kakunin API key |
+| `agentId` | `string` | — | Default agent ID. Can be overridden per tool call. |
+| `baseUrl` | `string` | — | Override API base URL. Defaults to production. |
+
+---
+
+## Tools
+
+### `verifyAgentCertificate`
+
+Checks certificate status, active scope permissions, expiry, and revocation history. Calls the public verify endpoint — no API key required internally.
+
+```ts
+// Model invokes:
+// verifyAgentCertificate({ agentId: "agt-123" })
+// → { status: "active", scopes: ["trade.execute"], valid_until: "2027-...", serial_number: "c4f9-..." }
+```
+
+| Input | Type | Description |
+|---|---|---|
+| `agentId` | `string` | Kakunin agent ID or certificate serial |
+
+---
+
+### `checkAgentScope`
+
+Returns `allowed: true/false` for a given action string, plus the agent's full permitted scope list. Use as a pre-flight check before any privileged operation.
+
+```ts
+// Model invokes:
+// checkAgentScope({ agentId: "agt-123", action: "trade.execute" })
+// → { allowed: true, action: "trade.execute", permittedScopes: ["trade.execute", "data.read"] }
+```
+
+| Input | Type | Description |
+|---|---|---|
+| `agentId` | `string` | Kakunin agent ID |
+| `action` | `string` | Action to check, e.g. `"trade.execute"`, `"data.write"` |
+
+---
+
+### `getBehaviorRiskScore`
+
+Returns the current rolling behavioral risk score (0–1) and risk band. Use before high-stakes operations.
+
+```ts
+// Model invokes:
+// getBehaviorRiskScore({ agentId: "agt-123" })
+// → { score: 0.42, band: "medium", agentId: "agt-123" }
+```
+
+Risk bands:
+
+| Band | Score range | Notes |
+|---|---|---|
+| `low` | < 0.3 | Normal operation |
+| `medium` | ≥ 0.3 | Elevated — monitor |
+| `high` | ≥ 0.75 | Pre-revocation warning issued |
+| `critical` | ≥ 0.85 | Auto-revocation triggers within 60s |
+
+---
+
+### `emitBehaviorEvent`
+
+Writes a behavioral event to Kakunin's immutable audit trail. Required for EU AI Act Article 12 compliance logging. Fire-and-forget — the model call resolves immediately.
+
+```ts
+// Model invokes:
+// emitBehaviorEvent({ agentId: "agt-123", actionType: "transaction_initiated", details: { amount: 50000 } })
+// → { eventId: "evt-abc", agentId: "agt-123", actionType: "transaction_initiated" }
+```
+
+| Input | Type | Description |
+|---|---|---|
+| `agentId` | `string` | Agent performing the action |
+| `actionType` | `enum` | One of 10 canonical types (see below) |
+| `details` | `Record<string, unknown>` | Optional context stored with the event |
+
+**Valid `actionType` values:**
+
+`api_call` · `authentication_attempt` · `authentication_failure` · `data_access` · `data_mutation` · `transaction_initiated` · `transaction_anomaly` · `unauthorized_access_attempt` · `message_signed` · `message_verification_failed`
+
+---
+
+## Full example — compliance-aware trading agent
+
+```ts
+import { createKakuninTools } from '@kakunin/ai-sdk';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const tools = createKakuninTools({ apiKey: process.env.KAK_API_KEY! });
+
+const { text, toolResults } = await generateText({
+  model: openai('gpt-4o'),
+  tools,
+  maxSteps: 5,
+  system: `You are a compliance officer for an automated trading system.
+Before approving any trade, you must:
+1. Verify the agent's certificate is active
+2. Check the agent has trade.execute scope
+3. Confirm the risk score is below 0.75
+4. Emit a transaction_initiated event
+Only approve the trade if all checks pass.`,
+  prompt: 'Agent agt-123 wants to execute a €50,000 EUR/USD trade. Run compliance checks.',
+});
+
+console.log(text);
+```
+
+---
+
+## Using with `streamText`
+
+```ts
+import { createKakuninTools } from '@kakunin/ai-sdk';
+import { streamText } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+const tools = createKakuninTools({ apiKey: process.env.KAK_API_KEY! });
+
+const result = streamText({
+  model: anthropic('claude-sonnet-4-6'),
+  tools,
+  prompt: 'Check risk score for agt-123 and emit an api_call event.',
+});
+
+for await (const chunk of result.textStream) {
+  process.stdout.write(chunk);
+}
+```
+
+---
+
+## MCP alternative
+
+If you need the full Kakunin tool surface (all API operations, not just the four compliance guards), use Kakunin's MCP server with the Vercel AI SDK's `experimental_createMCPClient`:
+
+```ts
+import { experimental_createMCPClient } from 'ai';
+
+const kakuninMCP = await experimental_createMCPClient({
+  transport: {
+    type: 'sse',
+    url: 'https://www.kakunin.ai/api/mcp',
+    headers: { Authorization: `Bearer ${process.env.KAK_API_KEY}` },
+  },
+});
+
+const mcpTools = await kakuninMCP.tools();
+```
+
+See [MCP Server docs](/docs/mcp) for the full tool list.

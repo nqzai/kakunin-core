@@ -1,0 +1,15 @@
+# Internal reference docs and local planning artifacts
+/docs/
+/.noteshell/
+/TODOS.md
+/KYA_Competitive_Analysis_2026.docx
+/kakunin-samples-fixes.patch
+
+# Separate deployment target — keep in git, but do not ship to Vercel
+/huggingface-space/
+
+# Local/generated Supabase CLI metadata
+/supabase/.temp/
+
+# Marketing and outreach work products not used by the Next.js app build
+/scripts/seo/

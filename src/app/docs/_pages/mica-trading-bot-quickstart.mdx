@@ -1,0 +1,421 @@
+export const metadata = {
+  title: "Quickstart: Deploy MiCA-Compliant Trading Bot in 30 Minutes",
+  description: "Step-by-step guide to go from zero to MiCA-compliant autonomous trading bot using Kakunin SDK.",
+};
+
+# Quickstart: Deploy MiCA-Compliant Trading Bot in 30 Minutes
+
+This quickstart takes you from zero to a production-ready, MiCA-compliant trading bot.
+
+**Time:** ~30 minutes  
+**Prerequisites:** Node.js 18+, Kubernetes cluster or Docker, Kakunin account
+
+---
+
+## Step 1: Create Kakunin Account (5 min)
+
+Go to [dashboard.kakunin.ai](/dashboard) and sign up. You'll get an **API key**
+for agent management. Certificate private keys are held in Kakunin's AWS KMS —
+you never manage key material yourself.
+
+Set up environment variables:
+
+```bash
+# .env.local
+KAKUNIN_API_KEY=kak_live_xxxxxxxxxxxxxxxx   # kak_test_ for the sandbox
+```
+
+---
+
+## Step 2: Define MiCA Scope (5 min)
+
+Create a policy file that matches your regulatory requirements:
+
+```typescript
+// mica-policy.ts
+const micaPolicy = {
+  agentName: 'algo_trader_v2',
+  operatorName: 'your_company_ltd',
+  operatorRegulatorId: 'FINMA-123456',  // Your regulatory registration
+  
+  // MiCA scope limits
+  scope: {
+    maxTradeSize: 25000,  // EUR per trade
+    maxDailyVolume: 500000,  // EUR per day
+    allowedMarkets: ['EUR_USD', 'GBP_EUR'],  // Only these pairs
+    tradingHours: {
+      start: '08:00',
+      end: '17:00',
+      tz: 'UTC',
+      excludeWeekends: true,
+    },
+    allowedRegions: ['eu-west-1'],  // GDPR compliance
+  },
+
+  // Risk controls
+  riskControls: {
+    killSwitchAutomatic: 'anomaly_0.85',  // Revoke if anomaly > 0.85
+    circuitBreakerThreshold: 0.75,
+    maxConsecutiveFailures: 3,
+  },
+
+  // Documentation (for regulators)
+  governance: {
+    boardApprovedDate: '2026-05-01',
+    nextAuditDate: '2026-08-01',
+  },
+};
+
+export default micaPolicy;
+```
+
+---
+
+## Step 3: Install Dependencies (2 min)
+
+```bash
+npm install @kakunin/sdk axios dotenv
+```
+
+---
+
+## Step 4: Initialize Agent (5 min)
+
+```typescript
+// src/agent/bootstrap.ts
+import { Kakunin } from '@kakunin/sdk';
+import micaPolicy from '../mica-policy';
+
+const kakunin = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+export async function bootstrapAgent() {
+  // Create the agent with its MiCA scope encoded up front. financial_scope is
+  // baked into the X.509 certificate, so verification enforces these limits.
+  const agent = await kakunin.agents.create({
+    name: micaPolicy.agentName,
+    model_hash: await Kakunin.computeModelHash('algo-trader:v2.1.0'),
+    model: 'algo-trader',
+    version: '2.1.0',
+    permitted_actions: ['trade.execute'],
+    financial_scope: {
+      max_single_trade_usd: micaPolicy.scope.maxTradeSize,
+      daily_limit_usd: micaPolicy.scope.maxDailyVolume,
+      permitted_instruments: micaPolicy.scope.allowedMarkets,
+      leverage_permitted: false,
+    },
+    metadata: {
+      deployment: 'kubernetes',
+      operator: micaPolicy.operatorName,
+      regulatorId: micaPolicy.operatorRegulatorId,
+    },
+  });
+
+  console.log(`✓ Agent created: ${agent.id}`);
+
+  // Issue the X.509 certificate via AWS KMS — the private key never leaves the HSM.
+  const cert = await kakunin.agents.certify(agent.id);
+  console.log(`✓ Certificate issued: ${cert.serial_number}`);
+
+  // Store the public identity (there is no private key to hold — KMS owns it).
+  const identity = {
+    agentId: agent.id,
+    certificatePem: cert.certificate_pem,
+    serialNumber: cert.serial_number,
+  };
+
+  // Save to secure location (not in code!)
+  await saveToSecretManager(identity);
+
+  return identity;
+}
+
+async function saveToSecretManager(identity: any) {
+  // Use Kubernetes Secrets, AWS Secrets Manager, or equivalent
+  // NEVER hardcode credentials
+  console.log('Saving identity to secret manager...');
+}
+```
+
+---
+
+## Step 5: Implement Trading Logic (8 min)
+
+```typescript
+// src/agent/trading-engine.ts
+import { Kakunin } from '@kakunin/sdk';
+import axios from 'axios';
+
+const kakunin = new Kakunin({
+  apiKey: process.env.KAKUNIN_API_KEY,
+});
+
+export async function executeTrade(
+  identity: any,
+  tradeRequest: {
+    market: string;
+    side: 'BUY' | 'SELL';
+    size: number;
+  }
+) {
+  // Step 1: Pre-trade check — confirm the certificate is still active and the
+  // trade is within the certified financial scope. Verification is public/keyless.
+  const verified = await kakunin.verify.cert(identity.serialNumber);
+  if (verified.status !== 'active') {
+    console.error(`❌ Trade blocked: certificate ${verified.status}`);
+    return { error: `certificate_${verified.status}` };
+  }
+  if (tradeRequest.size > (verified.financial_scope?.max_single_trade_usd ?? 0)) {
+    console.error('❌ Trade blocked: exceeds certified max_single_trade_usd');
+    return { error: 'scope_exceeded' };
+  }
+
+  // Step 2: Sign the trade with the agent's KMS-backed RSA key. No key material
+  // leaves KMS; any counterparty can verify via POST /v1/verify/message.
+  const signRes = await fetch(
+    `https://api.kakunin.ai/v1/agents/${identity.agentId}/sign`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.KAKUNIN_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ payload: tradeRequest }),
+    },
+  );
+  const signed = await signRes.json();
+  console.log(`✓ Trade signed (serial ${identity.serialNumber})`);
+
+  // Step 3: Submit to the exchange with proof of identity
+  const response = await axios.post('https://api.exchange.com/v1/trades', tradeRequest, {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Agent-Certificate': identity.certificatePem,
+      'X-Agent-Signature': signed.signature,
+      'Authorization': `Bearer ${process.env.EXCHANGE_API_KEY}`,
+    },
+  });
+
+  if (response.status !== 200) {
+    console.error(`❌ Exchange rejected trade: ${response.data}`);
+    return { error: 'exchange_rejected' };
+  }
+
+  // Step 4: Stream the trade to Kakunin's risk engine for behavioral scoring.
+  const risk = await kakunin.events.ingest({
+    agentId: identity.agentId,
+    actionType: 'transaction_initiated',
+    details: { market: tradeRequest.market, side: tradeRequest.side, amount: tradeRequest.size },
+  });
+
+  // Step 5: Log the trade (for MiCA audit trail)
+  await logTrade(identity, tradeRequest, signed, response.data);
+
+  console.log(`✓ Trade executed: ${response.data.orderId} (risk ${risk.risk_band})`);
+  return response.data;
+}
+
+async function logTrade(identity: any, request: any, signed: any, result: any) {
+  const auditEntry = {
+    timestamp: new Date().toISOString(),
+    agentId: identity.agentId,
+    agentCertSerial: identity.serialNumber,
+    orderId: result.orderId,
+    market: request.market,
+    side: request.side,
+    size: request.size,
+    executionPrice: result.executionPrice,
+    signature: signed.signature.substring(0, 50) + '...',
+    signatureVerified: true,
+  };
+
+  console.log('📋 Audit log:', JSON.stringify(auditEntry, null, 2));
+
+  // Store in audit log (WORM — write-once, read-many)
+  // This is your evidence for regulators
+}
+```
+
+---
+
+## Step 6: Behavioral Baseline (Automatic)
+
+You don't hand-author a baseline. Kakunin **derives** the agent's behavioral
+baseline from the events you stream via `events.ingest` (Step 5), over a rolling
+30-day window. Each new event is scored against that baseline; there's nothing
+to register.
+
+Check baseline readiness at any time with `agents.getRisk` — `drift.drift_score`
+stays `null` until the 30-day baseline is established, then becomes a number:
+
+```typescript
+// src/agent/kya-status.ts
+import { Kakunin } from '@kakunin/sdk';
+
+const kakunin = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+export async function baselineReady(agentId: string) {
+  const risk = await kakunin.agents.getRisk(agentId);
+  const ready = risk.drift.drift_score !== null;
+  console.log(ready
+    ? `✓ Baseline established — drift ${risk.drift.drift_trend}`
+    : '… still warming up (keep ingesting events)');
+  return ready;
+}
+```
+
+Until then, keep the bot ingesting `transaction_initiated` events during a
+staging run so the baseline reflects normal operation before go-live.
+
+---
+
+## Step 7: Deploy to Kubernetes (2 min)
+
+```yaml
+# k8s/trading-bot.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: algo-trader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: algo-trader
+  template:
+    metadata:
+      labels:
+        app: algo-trader
+    spec:
+      serviceAccountName: algo-trader
+      containers:
+      - name: trading-bot
+        image: myrepo/algo-trader:v2
+        env:
+        - name: KAKUNIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kakunin-secrets
+              key: api-key
+        - name: EXCHANGE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: exchange-secrets
+              key: api-key
+        volumeMounts:
+        - name: agent-identity
+          mountPath: /var/secrets/agent
+          readOnly: true
+        - name: audit-logs
+          mountPath: /var/audit
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      
+      volumes:
+      - name: agent-identity
+        secret:
+          secretName: agent-certificate
+      - name: audit-logs
+        persistentVolumeClaim:
+          claimName: audit-logs-pvc
+```
+
+Deploy:
+
+```bash
+kubectl apply -f k8s/trading-bot.yaml
+kubectl rollout status deployment/algo-trader -w
+```
+
+---
+
+## Step 8: Verify Deployment (2 min)
+
+```bash
+# Check agent is running
+kubectl logs -f deployment/algo-trader
+
+# Expected output:
+# ✓ Agent created: agent_12345
+# ✓ Certificate issued: F1D4E8C7B2A9F3E6
+# ✓ Streaming behavioral events, baseline warming up
+# Waiting for trading signals...
+
+# Port forward to local for testing
+kubectl port-forward svc/algo-trader 8080:8080
+
+# Test health check
+curl http://localhost:8080/health
+# Expected: {"status": "ok", "anomalyScore": 0.05}
+```
+
+---
+
+## Step 9: Prepare Regulatory Documentation
+
+Create a folder with:
+
+```
+/regulatory-docs
+├── board-resolution.pdf          # Board approved this deployment
+├── mica-policy.json              # Scope policy + governance framework
+├── baseline-profile.json         # Behavioral baseline (7-day period)
+├── certificate-chain.pem         # Full X.509 certificate chain
+├── sample-audit-logs.json        # First 10 trades with signatures
+├── incident-response-plan.md     # What happens if anomaly detected
+└── testing-schedule.md           # Annual fitness tests scheduled
+```
+
+Submit to your regulator. You now have:
+- ✓ Documented governance framework
+- ✓ Cryptographic proof of agent identity
+- ✓ Behavioral baseline for anomaly detection
+- ✓ Complete audit trail with signatures
+- ✓ Automatic enforcement of scope limits
+
+---
+
+## Step 10: Monitor & Adjust (Ongoing)
+
+```typescript
+// src/monitoring/dashboard.ts
+import { Kakunin } from '@kakunin/sdk';
+
+const kakunin = new Kakunin({ apiKey: process.env.KAKUNIN_API_KEY! });
+
+setInterval(async () => {
+  const risk = await kakunin.agents.getRisk(agentId);
+
+  console.log(`
+Agent: ${agentId}
+Dominant band:   ${risk.dominant_band}
+Drift score:     ${risk.drift.drift_score ?? 'baseline warming up'}
+Drift trend:     ${risk.drift.drift_trend}
+Recent high-risk events: ${risk.recent_high_risk_events.length}
+  `);
+
+  // High band means an automatic revocation check has been queued
+  if (risk.dominant_band === 'high') {
+    console.warn('⚠️ Agent in high-risk band.', risk.recent_high_risk_events);
+  }
+}, 60000);  // Check every minute
+```
+
+---
+
+## You're Done! 🎉
+
+Your trading bot is now:
+- ✓ **Cryptographically identifiable** (X.509 certificate)
+- ✓ **Scope-enforced** (pre-trade controls)
+- ✓ **Behaviorally monitored** (KYA baseline + anomaly detection)
+- ✓ **Audit-logged** (immutable record of every trade)
+- ✓ **MiCA-compliant** (Articles 67–72 implemented)
+
+**Next:** Go through the [MiCA case study](/blog/mica-trading-bot-case-study) to see what happens when the bot behaves anomalously.
+
+**Questions?** See the [MiCA compliance deep dive](/docs/mica-trading-bots) for regulatory details.
+

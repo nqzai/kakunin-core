@@ -1,0 +1,24 @@
+export const metadata = {
+  title: "API Authentication — Kakunin Docs",
+  description: "How Kakunin API authentication works: bearer keys, middleware validation, tenant scoping, rotation, and safe usage patterns for server-side integrations.",
+};
+
+# API Authentication
+
+Kakunin uses bearer API keys for server-to-server authentication. Every request to the authenticated API surface must include an `Authorization` header with a valid key. The edge middleware validates the key before the request reaches route handlers, which keeps auth failures out of application code and ensures invalid traffic is rejected as early as possible.
+
+API keys are tenant-scoped. That means a key does not grant universal access across the workspace; it resolves to the tenant that created it and inherits that tenant’s permissions and data boundaries. This matters for AI agent systems because the same application may be operating on behalf of multiple customers, environments, or compliance contexts. Keeping identity and access scoped at the edge reduces the risk of cross-tenant leakage.
+
+Use the keys only from trusted server environments. For browser-facing flows, proxy requests through your backend instead of embedding secrets client-side. Rotate keys regularly and revoke anything you no longer use. Kakunin treats revocation as immediate, so a stale key should stop working as soon as it is removed.
+
+The recommended request pattern looks like this:
+
+```http
+GET /v1/agents HTTP/1.1
+Host: api.kakunin.ai
+Authorization: Bearer kak_live_example
+```
+
+If you are building a Next.js or serverless integration, store the key in environment variables and read it on the server only. Do not log it, do not expose it to the browser, and do not reuse production credentials in local testing.
+
+For related setup guidance, see [Kakunin Integration Guide](/docs/kyc-integration) and [Secure Runtime Binding](/docs/runtime-binding).
