@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
-    "@aws-sdk/client-kms": "^3.1048.0",
+    "@aws-sdk/client-kms": "^3.1080.0",
     "@aws-sdk/client-s3": "^3.1048.0",
     "@portabletext/react": "^6.2.0",
     "@react-pdf/renderer": "^4.5.1",
