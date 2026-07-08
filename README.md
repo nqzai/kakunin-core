@@ -27,6 +27,24 @@ at [kakunin.ai](https://www.kakunin.ai).
 > must be able to verify a Kakunin certificate against one authority. See
 > [Open Source vs Hosted](https://www.kakunin.ai/open-source).
 
+## 🚀 Most developers should start with the SDKs
+
+**You don't need to self-host this platform to use Kakunin.** The fastest way to add
+cryptographic identity, behavioral monitoring, and compliance to your AI agents is the
+lightweight, Apache-2.0 SDKs — they talk to the hosted service, with free sandbox keys.
+
+| Language | Package | Install | License |
+|---|---|---|---|
+| **TypeScript** | `@kakunin/sdk` | `npm install @kakunin/sdk` | Apache-2.0 |
+| **Python** | `kakunin` | `pip install kakunin` | Apache-2.0 |
+
+**[TypeScript SDK →](https://github.com/nqzai/kakunin-sdk-typescript)** ·
+**[Python SDK →](https://github.com/nqzai/kakunin-sdk-python)** ·
+**[Docs →](https://www.kakunin.ai/docs)**
+
+Reach for **this repo (Core)** only when you need to run your own control plane. For
+everything else, the SDKs are the on-ramp.
+
 ## What's here vs. the SDKs
 
 The client libraries developers install live in their own repositories and are
