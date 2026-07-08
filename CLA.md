@@ -1,10 +1,5 @@
 # Kakunin Individual Contributor License Agreement
 
-> **DRAFT — NOT YET EFFECTIVE.** This text is a starting point prepared for
-> review by IP counsel (see the "IP counsel" item on the launch checklist).
-> Do not publish or begin collecting signatures against it until counsel has
-> reviewed and you have replaced the placeholders below.
-
 Thank you for your interest in contributing to software projects managed by
 **Immortal Reality PA LLC** ("Kakunin", "we", "us"). This Contributor License
 Agreement ("Agreement") sets out the terms under which You provide
