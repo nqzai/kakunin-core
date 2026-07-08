@@ -1,0 +1,27 @@
+name: Self-assign
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  issues: write
+jobs:
+  assign:
+    # Only on issues (not PRs), only for /assign or /unassign
+    if: >-
+      ${{ !github.event.issue.pull_request
+          && (startsWith(github.event.comment.body, '/assign')
+              || startsWith(github.event.comment.body, '/unassign')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.comment.body.trim();
+            const assignee = context.payload.comment.user.login;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            if (body.startsWith('/unassign')) {
+              await github.rest.issues.removeAssignees({ owner, repo, issue_number, assignees: [assignee] });
+            } else {
+              await github.rest.issues.addAssignees({ owner, repo, issue_number, assignees: [assignee] });
+            }
