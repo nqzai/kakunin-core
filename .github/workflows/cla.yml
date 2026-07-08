@@ -11,14 +11,16 @@ on:
     types: [opened, closed, synchronize]
 
 permissions:
-  actions: write
-  contents: write
-  pull-requests: write
-  statuses: write
+  contents: read
 
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      statuses: write
     # Only run on real PRs or the actual sign/recheck comment — otherwise a
     # comment on a plain issue crashes the action (it resolves the issue number
     # as a PR). Also skip the maintainer's own PRs (their commits carry a

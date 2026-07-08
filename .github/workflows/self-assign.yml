@@ -3,15 +3,16 @@ on:
   issue_comment:
     types: [created]
 permissions:
-  issues: write
+  contents: read
 jobs:
   assign:
-    # Only on issues (not PRs), only for /assign or /unassign
     if: >-
       ${{ !github.event.issue.pull_request
           && (startsWith(github.event.comment.body, '/assign')
               || startsWith(github.event.comment.body, '/unassign')) }}
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - uses: actions/github-script@v7
         with:
