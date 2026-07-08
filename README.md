@@ -145,6 +145,7 @@ see [`CONTRIBUTING.md`](./CONTRIBUTING.md). Report vulnerabilities per
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 Thanks to everyone who contributes ([emoji key](https://allcontributors.org/docs/en/emoji-key)) — code and non-code alike:
@@ -152,8 +153,17 @@ Thanks to everyone who contributes ([emoji key](https://allcontributors.org/docs
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/SankeerthNara"><img src="https://avatars.githubusercontent.com/u/215511671?v=4?s=100" width="100px;" alt="SankeerthNara"/><br /><sub><b>SankeerthNara</b></sub></a><br /><a href="https://github.com/nqzai/kakunin-core/commits?author=SankeerthNara" title="Documentation">📖</a></td>
+    </tr>
+  </tbody>
+</table>
+
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 Contributions of any kind are welcome — this project follows the [all-contributors](https://allcontributors.org) spec.
