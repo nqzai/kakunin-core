@@ -19,7 +19,10 @@ permissions:
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
-    if: ${{ vars.CLA_ENABLED == 'true' }}
+    # Skip the maintainer's own PRs — their commits carry a Co-Authored-By
+    # trailer for a non-signing tool identity, which the CLA check would
+    # otherwise demand a signature from. External contributors still sign.
+    if: ${{ vars.CLA_ENABLED == 'true' && github.event.pull_request.user.login != 'nqzai' }}
     steps:
       - name: "CLA Assistant"
         uses: contributor-assistant/github-action@v2.6.1
