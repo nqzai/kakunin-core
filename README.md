@@ -85,8 +85,16 @@ canonical service.
 
 ### Run the app in Docker
 
-The container builds and runs the Next.js application; you supply service
-credentials at runtime.
+Pull the published image from GitHub Container Registry (each release ships with
+a signed build-provenance attestation, like the npm/PyPI packages):
+
+```bash
+docker pull ghcr.io/nqzai/kakunin-core:latest
+docker run --env-file .env.local -p 3000:3000 ghcr.io/nqzai/kakunin-core:latest
+```
+
+Or build it yourself — the container runs the Next.js application; you supply
+service credentials at runtime:
 
 ```bash
 docker build -t kakunin-core .
