@@ -29,7 +29,7 @@ jobs:
           path-to-signatures: 'signatures/version1/cla.json'
           path-to-document: 'https://github.com/nqzai/kakunin-core/blob/main/CLA.md'
           branch: 'main'
-          allowlist: 'dependabot[bot],*[bot],renovate[bot]'
+          allowlist: 'nqzai,dependabot[bot],*[bot],renovate[bot]'
           custom-notsigned-prcomment: >
             Thank you for your contribution! Before we can merge, please read and
             sign the [Kakunin Contributor License Agreement](https://github.com/nqzai/kakunin-core/blob/main/CLA.md)
