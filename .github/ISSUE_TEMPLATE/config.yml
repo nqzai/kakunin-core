@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/nqzai/kakunin-core/security/policy
+    about: Report privately per SECURITY.md — never a public issue.
+  - name: Community & support
+    url: https://www.kakunin.ai/docs
+    about: Docs and support.
