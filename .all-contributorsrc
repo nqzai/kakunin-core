@@ -3,11 +3,24 @@
   "projectOwner": "nqzai",
   "repoType": "github",
   "repoHost": "https://github.com",
-  "files": ["README.md"],
+  "files": [
+    "README.md"
+  ],
   "imageSize": 100,
   "commit": true,
   "commitConvention": "angular",
   "contributorsPerLine": 7,
   "contributorsSortAlphabetically": true,
-  "contributors": []
+  "contributors": [
+    {
+      "login": "SankeerthNara",
+      "name": "SankeerthNara",
+      "avatar_url": "https://avatars.githubusercontent.com/u/215511671?v=4",
+      "profile": "https://github.com/SankeerthNara",
+      "contributions": [
+        "doc"
+      ]
+    }
+  ],
+  "commitType": "docs"
 }
