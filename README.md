@@ -64,6 +64,47 @@ npm test
 
 Full architecture and API documentation: [docs.kakunin.ai](https://www.kakunin.ai/docs).
 
+## Self-hosting & local development
+
+**Read this before expecting a one-command self-host.** Kakunin is a control
+plane that orchestrates external managed services — the app itself is stateless.
+Running the *platform* requires provisioning (see [`.env.example`](./.env.example),
+~50 variables):
+
+- **Supabase** — Postgres, auth, and RLS
+- **AWS KMS** (RSA-2048) — agent key custody; **AWS S3 Object-Lock** — the WORM audit log
+- **Upstash** — Redis (rate limiting) + QStash (async jobs)
+- **Stripe** (billing), **Resend** / **AgentMail** (email), **OpenRouter** (model routing), **Sanity** (content)
+
+Several of these — KMS key custody, S3 Object-Lock audit admissibility, the
+canonical CA — are hosted **by design**: a trust anchor you can fork is not a
+trust anchor, and a WORM log you host yourself proves nothing to a regulator.
+That reasoning is spelled out at [kakunin.ai/open-source](https://www.kakunin.ai/open-source).
+So you *can* run the code, but the security properties depend on the hosted
+canonical service.
+
+### Run the app in Docker
+
+The container builds and runs the Next.js application; you supply service
+credentials at runtime.
+
+```bash
+docker build -t kakunin-core .
+docker run --env-file .env.local -p 3000:3000 kakunin-core
+```
+
+### Local development dependencies
+
+For local dev you can spin up a Postgres and a Redis (this is **not** a full
+self-host — it does not stand in for Supabase auth/RLS, KMS, S3, QStash, or Stripe):
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+cp .env.example .env.local   # then fill in the service credentials you have
+npm ci
+npm run dev
+```
+
 ## License
 
 [GNU AGPL-3.0](./LICENSE). If you run a modified version of this software as a

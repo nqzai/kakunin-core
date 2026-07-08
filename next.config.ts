@@ -61,6 +61,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Emit a self-contained server build (.next/standalone) for the Docker image.
+  output: 'standalone',
   turbopack: {
     root: path.resolve(__dirname),
   },
