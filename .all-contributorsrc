@@ -3,11 +3,24 @@
   "projectOwner": "nqzai",
   "repoType": "github",
   "repoHost": "https://github.com",
-  "files": ["README.md"],
+  "files": [
+    "README.md"
+  ],
   "imageSize": 100,
   "commit": true,
   "commitConvention": "angular",
   "contributorsPerLine": 7,
   "contributorsSortAlphabetically": true,
-  "contributors": []
+  "contributors": [
+    {
+      "login": "yangchunxuan",
+      "name": "yangchunxuan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/207044617?v=4",
+      "profile": "https://github.com/yangchunxuan",
+      "contributions": [
+        "doc"
+      ]
+    }
+  ],
+  "commitType": "docs"
 }
