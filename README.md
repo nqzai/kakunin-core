@@ -1,5 +1,7 @@
 # Kakunin — AI Agent Compliance Platform
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nqzai/kakunin-core/badge)](https://scorecard.dev/viewer/?uri=github.com/nqzai/kakunin-core)
+
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![SDKs: Apache-2.0](https://img.shields.io/badge/SDKs-Apache--2.0-green.svg)](https://github.com/nqzai/kakunin-sdk-typescript)
 
