@@ -19,10 +19,17 @@ permissions:
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
-    # Skip the maintainer's own PRs — their commits carry a Co-Authored-By
-    # trailer for a non-signing tool identity, which the CLA check would
-    # otherwise demand a signature from. External contributors still sign.
-    if: ${{ vars.CLA_ENABLED == 'true' && github.event.pull_request.user.login != 'nqzai' }}
+    # Only run on real PRs or the actual sign/recheck comment — otherwise a
+    # comment on a plain issue crashes the action (it resolves the issue number
+    # as a PR). Also skip the maintainer's own PRs (their commits carry a
+    # Co-Authored-By tool trailer the CLA would otherwise flag). External
+    # contributors still sign.
+    if: >-
+      ${{ vars.CLA_ENABLED == 'true'
+          && github.event.pull_request.user.login != 'nqzai'
+          && (github.event_name == 'pull_request_target'
+              || github.event.comment.body == 'recheck'
+              || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') }}
     steps:
       - name: "CLA Assistant"
         uses: contributor-assistant/github-action@v2.6.1
