@@ -79,7 +79,7 @@ const organizationSchema = {
   },
   sameAs: [
     "https://www.linkedin.com/company/kakunin",
-    "https://github.com/nqzai/kakunin",
+    "https://github.com/kakunin-ai",
     "https://twitter.com/kakuninai",
   ],
 };
