@@ -159,7 +159,7 @@ export default function OpenSourcePage() {
           </p>
           <div className="pp-hero-ctas">
             <a
-              href="https://github.com/nqzai"
+              href="https://github.com/kakunin-ai"
               className="btn btn--primary btn--lg"
               target="_blank"
               rel="noopener noreferrer"
@@ -251,7 +251,7 @@ export default function OpenSourcePage() {
               <div className="pp-feature" key={repo.name}>
                 <h3>
                   <a
-                    href={`https://github.com/nqzai/${repo.name}`}
+                    href={`https://github.com/kakunin-ai/${repo.name}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: 'inherit', textDecoration: 'none' }}
@@ -332,7 +332,7 @@ export default function OpenSourcePage() {
             </p>
             <div className="pp-cta-actions">
               <a
-                href="https://github.com/nqzai/kakunin-sdk-typescript"
+                href="https://github.com/kakunin-ai/kakunin-sdk-typescript"
                 className="btn btn--primary btn--lg"
                 target="_blank"
                 rel="noopener noreferrer"

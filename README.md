@@ -1,9 +1,9 @@
 # Kakunin — AI Agent Compliance Platform
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nqzai/kakunin-core/badge)](https://scorecard.dev/viewer/?uri=github.com/nqzai/kakunin-core)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/kakunin-ai/kakunin-core/badge)](https://scorecard.dev/viewer/?uri=github.com/kakunin-ai/kakunin-core)
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![SDKs: Apache-2.0](https://img.shields.io/badge/SDKs-Apache--2.0-green.svg)](https://github.com/nqzai/kakunin-sdk-typescript)
+[![SDKs: Apache-2.0](https://img.shields.io/badge/SDKs-Apache--2.0-green.svg)](https://github.com/kakunin-ai/kakunin-sdk-typescript)
 
 <p align="center">
   <img src="public/kakunin-demo.gif" alt="An AI agent's risk score climbs as it misbehaves; at 0.85 its X.509 certificate is automatically revoked (decertified) within seconds." width="820" />
@@ -38,8 +38,8 @@ lightweight, Apache-2.0 SDKs — they talk to the hosted service, with free sand
 | **TypeScript** | `@kakunin/sdk` | `npm install @kakunin/sdk` | Apache-2.0 |
 | **Python** | `kakunin` | `pip install kakunin` | Apache-2.0 |
 
-**[TypeScript SDK →](https://github.com/nqzai/kakunin-sdk-typescript)** ·
-**[Python SDK →](https://github.com/nqzai/kakunin-sdk-python)** ·
+**[TypeScript SDK →](https://github.com/kakunin-ai/kakunin-sdk-typescript)** ·
+**[Python SDK →](https://github.com/kakunin-ai/kakunin-sdk-python)** ·
 **[Docs →](https://www.kakunin.ai/docs)**
 
 Reach for **this repo (Core)** only when you need to run your own control plane. For
@@ -52,11 +52,11 @@ Apache-2.0:
 
 | | Repo | Package |
 |---|---|---|
-| TypeScript SDK | [kakunin-sdk-typescript](https://github.com/nqzai/kakunin-sdk-typescript) | `@kakunin/sdk` |
-| Python SDK | [kakunin-sdk-python](https://github.com/nqzai/kakunin-sdk-python) | `kakunin` |
-| Framework integrations | [kakunin-integrations](https://github.com/nqzai/kakunin-integrations) | `@kakunin/middleware`, `@kakunin/langchain`, `@kakunin/mastra`, `@kakunin/ai-sdk` |
-| MCP server | [kakunin-mcp](https://github.com/nqzai/kakunin-mcp) | `@kakunin/mcp` |
-| Examples | [kakunin-samples](https://github.com/nqzai/kakunin-samples) | — |
+| TypeScript SDK | [kakunin-sdk-typescript](https://github.com/kakunin-ai/kakunin-sdk-typescript) | `@kakunin/sdk` |
+| Python SDK | [kakunin-sdk-python](https://github.com/kakunin-ai/kakunin-sdk-python) | `kakunin` |
+| Framework integrations | [kakunin-integrations](https://github.com/kakunin-ai/kakunin-integrations) | `@kakunin/middleware`, `@kakunin/langchain`, `@kakunin/mastra`, `@kakunin/ai-sdk` |
+| MCP server | [kakunin-mcp](https://github.com/kakunin-ai/kakunin-mcp) | `@kakunin/mcp` |
+| Examples | [kakunin-samples](https://github.com/kakunin-ai/kakunin-samples) | — |
 
 **This repo (the platform) is AGPL-3.0. The SDKs are Apache-2.0** — build on top
 of Kakunin without any copyleft obligation.
@@ -107,8 +107,8 @@ Pull the published image from GitHub Container Registry (each release ships with
 a signed build-provenance attestation, like the npm/PyPI packages):
 
 ```bash
-docker pull ghcr.io/nqzai/kakunin-core:latest
-docker run --env-file .env.local -p 3000:3000 ghcr.io/nqzai/kakunin-core:latest
+docker pull ghcr.io/kakunin-ai/kakunin-core:latest
+docker run --env-file .env.local -p 3000:3000 ghcr.io/kakunin-ai/kakunin-core:latest
 ```
 
 Or build it yourself — the container runs the Next.js application; you supply
@@ -156,7 +156,7 @@ Thanks to everyone who contributes ([emoji key](https://allcontributors.org/docs
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/yangchunxuan"><img src="https://avatars.githubusercontent.com/u/207044617?v=4?s=100" width="100px;" alt="yangchunxuan"/><br /><sub><b>yangchunxuan</b></sub></a><br /><a href="https://github.com/nqzai/kakunin-core/commits?author=yangchunxuan" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/yangchunxuan"><img src="https://avatars.githubusercontent.com/u/207044617?v=4?s=100" width="100px;" alt="yangchunxuan"/><br /><sub><b>yangchunxuan</b></sub></a><br /><a href="https://github.com/kakunin-ai/kakunin-core/commits?author=yangchunxuan" title="Documentation">📖</a></td>
     </tr>
   </tbody>
 </table>

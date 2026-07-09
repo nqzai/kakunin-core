@@ -3,7 +3,7 @@
 # the same supply-chain posture as the npm/PyPI packages. No external secrets:
 # auth uses the built-in GITHUB_TOKEN.
 #
-#   docker pull ghcr.io/nqzai/kakunin-core:latest
+#   docker pull ghcr.io/kakunin-ai/kakunin-core:latest
 name: Publish container image
 
 on:

@@ -39,12 +39,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: 'signatures/version1/cla.json'
-          path-to-document: 'https://github.com/nqzai/kakunin-core/blob/main/CLA.md'
+          path-to-document: 'https://github.com/kakunin-ai/kakunin-core/blob/main/CLA.md'
           branch: 'main'
           allowlist: 'nqzai,dependabot[bot],*[bot],renovate[bot]'
           custom-notsigned-prcomment: >
             Thank you for your contribution! Before we can merge, please read and
-            sign the [Kakunin Contributor License Agreement](https://github.com/nqzai/kakunin-core/blob/main/CLA.md)
+            sign the [Kakunin Contributor License Agreement](https://github.com/kakunin-ai/kakunin-core/blob/main/CLA.md)
             by posting the exact comment below in this PR.
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           custom-allsigned-prcomment: 'All contributors have signed the CLA. ✍️✅'
